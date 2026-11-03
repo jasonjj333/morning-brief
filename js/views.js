@@ -503,7 +503,7 @@ export function itemSheetHTML(store, item, { showOpen = true } = {}) {
     </div>
     <label class="field">
       <span class="field-label">Tell Claude what to change</span>
-      <textarea rows="3" placeholder="It moved to Friday. Or: this is done, Alec owns it now." data-sheet-note></textarea>
+      <textarea rows="3" placeholder="It moved to Friday. Or: this is done, someone else owns it now." data-sheet-note></textarea>
     </label>
     <button class="btn btn-primary btn-wide" type="button" data-sheet="send" disabled>Send note</button>
     ${mine.length ? `<div class="item-pending"><h3>Already sent</h3><ul class="rows fb-list">${mine.map(withdrawable).join('')}</ul></div>` : ''}
@@ -519,7 +519,7 @@ export function addSheetHTML(kind = 'todo') {
     </div>
     <label class="field">
       <span class="field-label" data-add-label>${kind === 'note' ? 'What should Claude know or do?' : kind === 'event' ? 'What is happening?' : 'What needs doing?'}</span>
-      <textarea rows="3" autofocus data-add-text placeholder="${kind === 'note' ? 'Stop listing the BC Connect channels in my Slack recap.' : kind === 'event' ? 'Project Lightning demo for Margaret' : 'Send De\'Aun the Pelago questions'}"></textarea>
+      <textarea rows="3" autofocus data-add-text placeholder="${kind === 'note' ? 'Skip channels I am not in when you recap Slack.' : kind === 'event' ? 'Sprint demo with the client' : 'Send the follow-up questions'}"></textarea>
     </label>
     <label class="field" data-add-due${kind === 'note' ? ' hidden' : ''}>
       <span class="field-label">${kind === 'event' ? 'Date' : 'Due date (optional)'}</span>
