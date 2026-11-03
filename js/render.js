@@ -41,6 +41,21 @@ export function friendlyName(path) {
   return t.replace(/^\d{4}-\d{2}-\d{2}\s*-\s*/, '');
 }
 
+// The hourly feedback routine fires at :30 past each hour, Monday to Friday (UTC).
+export function nextRun(from = new Date()) {
+  const d = new Date(from);
+  d.setUTCSeconds(0, 0);
+  if (d.getUTCMinutes() >= 30) d.setUTCHours(d.getUTCHours() + 1);
+  d.setUTCMinutes(30);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1), d.setUTCHours(0, 30);
+  return d;
+}
+export function nextRunLabel() {
+  const d = nextRun();
+  const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString([], { weekday: 'short' })} ${t}`;
+}
+
 // Pending feedback on a line shows on the line itself.
 export function statusOf(store, file, raw) {
   const mine = store.pending.filter((f) => f.target && f.target.file === file && f.target.raw === raw);
@@ -53,7 +68,7 @@ export function statusOf(store, file, raw) {
 
 function pills(st) {
   const out = [];
-  if (st.remove) out.push('<span class="pill pill-negative">Removing at 7:00</span>');
+  if (st.remove) out.push(`<span class="pill pill-negative">Removing at ${nextRunLabel()}</span>`);
   if (st.confirm) out.push('<span class="pill pill-positive">Confirmed</span>');
   if (st.note) out.push('<span class="pill pill-neutral">Note sent</span>');
   return out.join('');

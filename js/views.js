@@ -1,5 +1,5 @@
 import { esc, inline, plain, splitFrontmatter, stripLeadEmoji, splitItem } from './md.js';
-import { Ctx, renderBlocks, rowHTML, parseNote, sections, noteTitle, friendlyName, registry, resolveNote } from './render.js';
+import { Ctx, renderBlocks, rowHTML, parseNote, sections, noteTitle, friendlyName, registry, resolveNote, nextRunLabel } from './render.js';
 
 const DAILY = 'Daily/';
 const ACTIONS = 'Home Dashboard/Action Items.md';
@@ -159,7 +159,7 @@ export function todayView(store) {
         <div class="tile"><span class="tile-label">To do today</span><span class="tile-value">${todoOpen}</span><span class="tile-cap">${todoDone ? `${todoDone} done` : todoOpen ? 'None done yet' : 'All clear'}</span></div>
         <div class="tile"><span class="tile-label">Meetings today</span><span class="tile-value">${isToday ? live.length : '—'}</span><span class="tile-cap">${nextMeeting ? `Next ${esc(nextMeeting.cells[0])} · ${esc(plain(nextMeeting.cells[1]))}` : isToday ? 'Nothing left today' : 'Brief is from ' + esc(data.date ?? '')}</span></div>
         <div class="tile"><span class="tile-label">Due this week</span><span class="tile-value">${weekRows.length}</span><span class="tile-cap">${weekRows[0] ? `First ${esc(plain(weekRows[0].cells[0]))}` : 'Nothing due'}</span></div>
-        <div class="tile"><span class="tile-label">Sent to Claude</span><span class="tile-value">${pending.length}</span><span class="tile-cap">${pending.length ? 'Applied at 7:00 tomorrow' : 'Nothing waiting'}</span></div>
+        <div class="tile"><span class="tile-label">Sent to Claude</span><span class="tile-value">${pending.length}</span><span class="tile-cap">${pending.length ? `Applied at ${nextRunLabel()}` : 'Nothing waiting'}</span></div>
       </div>`;
 
       ctx.section = 'Top 3 today';
@@ -199,7 +199,7 @@ export function todayView(store) {
 
       const pendBody = pending.length
         ? `<ul class="rows">${pending.slice(-4).reverse().map(feedbackRow).join('')}</ul><button class="text-btn" type="button" data-goto="feedback">See all feedback</button>`
-        : '<p class="muted">Tap any item to confirm it, remove it, or tell Claude what to change. Claude applies it in tomorrow\'s brief.</p>';
+        : '<p class="muted">Tap any item to confirm it, remove it, or tell Claude what to change. Claude applies it within the hour on weekdays.</p>';
 
       const yLabel = yest ? stripLeadEmoji(yest.title) : 'Yesterday';
       el.innerHTML = `
@@ -473,7 +473,7 @@ export function feedbackView(store) {
       const done = [...store.processed].reverse().slice(0, 40);
       el.innerHTML = `
         <h1 class="large-title page-title">Feedback</h1>
-        <p class="subtitle">Claude reads this at 7:00 each weekday and updates your notes.</p>
+        <p class="subtitle">Claude applies these at half past every hour on weekdays. Next run ${esc(nextRunLabel())}.</p>
         ${syncBanner(store)}
         <div class="grid">
           ${panel({ title: 'Waiting for the next run', count: pending.length || null, body: pending.length ? `<ul class="rows fb-list">${pending.map(withdrawable).join('')}</ul>` : '<p class="muted">Nothing waiting. Tap any item in your brief to confirm it, remove it, or add a note.</p>' })}
@@ -526,7 +526,7 @@ export function addSheetHTML(kind = 'todo') {
       <input type="date" data-add-date>
     </label>
     <button class="btn btn-primary btn-wide" type="button" data-add-send disabled>Send to Claude</button>
-    <p class="muted small">Claude adds it to your notes in the next 7:00 run.</p>`;
+    <p class="muted small">Claude adds it to your notes at ${esc(nextRunLabel())}.</p>`;
 }
 
 export function settingsSheetHTML(store) {

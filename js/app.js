@@ -1,4 +1,5 @@
 import { Store, target } from './store.js';
+import { nextRunLabel } from './render.js';
 import { Navigator } from './nav.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
@@ -117,7 +118,7 @@ function collapse(el) {
 async function send(item, action, note = '') {
   try {
     await store.addFeedback({ action, target: target(item), note });
-    toast(action === 'remove' ? 'Claude removes it at 7:00' : action === 'confirm' ? 'Confirmed' : 'Sent to Claude');
+    toast(action === 'remove' ? `Claude removes it at ${nextRunLabel()}` : action === 'confirm' ? 'Confirmed' : 'Sent to Claude');
   } catch (e) { failed(e); }
 }
 
