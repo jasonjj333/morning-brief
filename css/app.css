@@ -821,6 +821,9 @@ tr.is-removing td { text-decoration: line-through; color: var(--muted); }
 }
 .toast.show { display: block; }
 .toast[data-tone="error"] { background: var(--negative); color: #fff; }
+.toast.has-action { pointer-events: auto; display: none; align-items: center; gap: 12px; padding: 8px 8px 8px 18px; }
+.toast.has-action.show { display: flex; }
+.toast-action { border: 0; background: var(--ground); color: var(--text); font-weight: 600; font-size: 13px; height: 30px; padding: 0 12px; border-radius: 999px; white-space: nowrap; }
 
 /* ---------- tablet and up ---------- */
 

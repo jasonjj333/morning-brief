@@ -68,21 +68,15 @@ function appUrl(kind, web) {
   return null;
 }
 
-// Try the app; if the page is still in front a moment later, the app isn't installed, so open the web link.
+// Hand the link to the app. No timed fallback: the browser's "Open Microsoft Outlook?" prompt keeps this page in
+// front, which looked like "app not installed" and opened the website instead. Offer the web link in a toast.
 function openInApp(kind, web) {
   const app = appUrl(kind, web);
   if (!app) { window.open(web, '_blank', 'noopener'); return; }
-  let left = false;
-  const away = () => { left = true; };
-  addEventListener('blur', away, { once: true });
-  document.addEventListener('visibilitychange', away, { once: true });
   location.href = app;
-  setTimeout(() => {
-    removeEventListener('blur', away);
-    document.removeEventListener('visibilitychange', away);
-    // Too late for a pop-up (browsers block it), so fall back in this tab.
-    if (!left && document.visibilityState === 'visible') location.assign(web);
-  }, 1400);
+  toast(kind === 'join' ? 'Opening the meeting app…' : 'Opening Outlook…', {
+    action: { label: 'Open in browser', run: () => window.open(web, '_blank', 'noopener') },
+  });
 }
 
 // ---------- taps ----------

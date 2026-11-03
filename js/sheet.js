@@ -110,14 +110,23 @@ function dragToDismiss(sheet, backdrop, close) {
 export function closeAllSheets() { return Promise.all(open.map((s) => s.close())); }
 
 let toastTimer = 0;
-export function toast(message, { tone = 'plain' } = {}) {
+export function toast(message, { tone = 'plain', action = null } = {}) {
   const el = document.getElementById('toast');
   el.textContent = message;
   el.dataset.tone = tone;
+  el.classList.toggle('has-action', !!action);
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toast-action';
+    b.textContent = action.label;
+    b.addEventListener('click', () => { action.run(); el.classList.remove('show'); }, { once: true });
+    el.append(b);
+  }
   clearTimeout(toastTimer);
   el.classList.add('show');
   animate(el, [{ transform: 'translate(-50%, 24px)', opacity: 0 }, { transform: 'translate(-50%, 0)', opacity: 1 }], spring({ response: 0.4, damping: 0.8 }));
   toastTimer = setTimeout(() => {
     animate(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-out' }).then(() => el.classList.remove('show'));
-  }, 2800);
+  }, action ? 6000 : 2800);
 }
