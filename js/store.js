@@ -229,6 +229,46 @@ export class Store extends EventTarget {
     }
   }
 
+  // ---------- routines and drafts ----------
+
+  get routinesDoc() { return this.json('Feedback/routines.json', { routines: [], models: [] }); }
+  get routines() { return this.routinesDoc.routines ?? []; }
+  get models() { return this.routinesDoc.models ?? []; }
+  get runs() { return this.json('Feedback/runs.json', { runs: [] }).runs ?? []; }
+  get runRequests() { return this.json('Feedback/run-requests.json', { requests: [] }).requests ?? []; }
+  get drafts() { return this.json('Feedback/drafts.json', { drafts: [] }).drafts ?? []; }
+
+  // The vault's GitHub Action fires the routine when this file changes.
+  async requestRun(key) {
+    const req = { id: crypto.randomUUID(), routine: key, at: new Date().toISOString() };
+    await this.mutate('Feedback/run-requests.json', (text) => {
+      const doc = safeJsonDoc(text, 'requests');
+      doc.requests = [...doc.requests, req].slice(-50);
+      return JSON.stringify(doc, null, 2) + '\n';
+    }, `app: run ${key} now`);
+    return req;
+  }
+
+  async setModel(key, model) {
+    await this.mutate('Feedback/routines.json', (text) => {
+      const doc = JSON.parse(text);
+      const r = doc.routines.find((x) => x.key === key);
+      if (!r || r.model === model) return null;
+      r.model = model;
+      return JSON.stringify(doc, null, 2) + '\n';
+    }, `app: ${key} routine uses ${model}`);
+  }
+
+  async saveDraft(id, patch) {
+    await this.mutate('Feedback/drafts.json', (text) => {
+      const doc = safeJsonDoc(text, 'drafts');
+      const d = doc.drafts.find((x) => x.id === id);
+      if (!d) throw Object.assign(new Error('That draft is gone. Pull to refresh.'), { status: 0 });
+      Object.assign(d, patch, { edited: true, updated: new Date().toISOString() });
+      return JSON.stringify(doc, null, 2) + '\n';
+    }, 'app: edit draft');
+  }
+
   // Toggle "- [ ]" on one line, found by its text so a shifted line number still works.
   async toggleTask(item, done) {
     await this.mutate(item.file, (text) => {
@@ -246,6 +286,11 @@ export class Store extends EventTarget {
 }
 
 export const target = (item) => ({ file: item.file, line: item.line, raw: item.raw, text: item.text, section: item.section ?? null });
+
+function safeJsonDoc(text, key) {
+  try { const d = JSON.parse(text || ''); if (d && Array.isArray(d[key])) return d; } catch { /* fall through */ }
+  return { version: 1, [key]: [] };
+}
 
 function safeJson(text) {
   try { const d = JSON.parse(text || ''); return d && typeof d === 'object' ? d : { version: 1, items: [] }; } catch { return { version: 1, items: [] }; }

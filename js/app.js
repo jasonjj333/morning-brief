@@ -6,7 +6,8 @@ import { wireSwipes } from './swipe.js';
 import { animate, spring } from './motion.js';
 import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
-  itemSheetHTML, addSheetHTML, settingsSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
+  itemSheetHTML, addSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
+  routinesHTML, settingsPageHTML,
 } from './views.js';
 
 const store = new Store();
@@ -22,6 +23,10 @@ const TABS = [
 
 function makeView(route) {
   if (route.startsWith('note:')) return noteView(store, route.slice(5));
+  if (route === 'settings') return {
+    route: 'settings', title: 'Settings',
+    render(el) { el.innerHTML = settingsPageHTML(store); bindSettings(el); },
+  };
   return { today: todayView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView }[route](store);
 }
 
@@ -101,7 +106,8 @@ document.addEventListener('click', (e) => {
   const act = e.target.closest('[data-action]');
   if (act) {
     const a = act.dataset.action;
-    if (a === 'settings') return settingsSheet();
+    if (a === 'settings') { closeAllSheets(); if (nav.current?.view.route !== 'settings') nav.push('settings'); return; }
+    if (a === 'routines') return routinesSheet();
     if (a === 'add') return addSheet(act.dataset.kind);
     if (a === 'sync') return store.sync().then(() => { if (!store.error) toast('Up to date'); });
   }
@@ -114,6 +120,9 @@ document.addEventListener('click', (e) => {
     openSheet({ title: d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }), body: dayItemsHTML(store, day.dataset.day) });
     return;
   }
+
+  const run = e.target.closest('[data-run]');
+  if (run) { e.stopPropagation(); runRoutine(run.dataset.run, run); return; }
 
   const check = e.target.closest('button.check');
   if (check) { e.stopPropagation(); toggle(check.closest('[data-iid]')); return; }
@@ -180,6 +189,7 @@ function itemSheet(row, { focusNote = false } = {}) {
     title: item.kind === 'task' ? 'To-do' : item.kind === 'row' ? 'Item' : 'Item',
     body: itemSheetHTML(store, item, { showOpen }),
     onMount({ sheet, close }) {
+      bindDraft(sheet);
       const ta = sheet.querySelector('[data-sheet-note]');
       const sendBtn = sheet.querySelector('[data-sheet="send"]');
       ta.addEventListener('input', () => { sendBtn.disabled = !ta.value.trim(); });
@@ -194,6 +204,42 @@ function itemSheet(row, { focusNote = false } = {}) {
         if (k === 'send' && ta.value.trim()) { close(); send(item, 'feedback', ta.value.trim()); }
       });
     },
+  });
+}
+
+// Drafts: edit, copy, open in Slack or Outlook, save. Nothing is ever sent from here.
+function bindDraft(sheet) {
+  const box = sheet.querySelector('[data-draft]');
+  if (!box) return;
+  const body = box.querySelector('[data-draft-body]');
+  const subject = box.querySelector('[data-draft-subject]');
+  const to = box.querySelector('[data-draft-to]');
+  const save = box.querySelector('[data-draft-save]');
+  const fields = [body, subject, to].filter(Boolean);
+  const initial = fields.map((f) => f.value).join('\u0000');
+  for (const f of fields) f.addEventListener('input', () => { save.disabled = fields.map((x) => x.value).join('\u0000') === initial; });
+  const copy = async () => { try { await navigator.clipboard.writeText(body.value); return true; } catch { return false; } };
+
+  box.querySelector('[data-draft-copy]').addEventListener('click', async () => toast(await copy() ? 'Copied' : 'Could not copy. Select the text and copy it.'));
+  box.querySelector('[data-draft-open]').addEventListener('click', async (e) => {
+    const b = e.currentTarget;
+    if (b.dataset.draftOpen === 'slack') {
+      const ok = await copy();
+      if (b.dataset.slack) location.href = b.dataset.slack;
+      toast(ok ? 'Copied. Paste it into the conversation.' : 'Opening Slack…');
+      return;
+    }
+    const q = (k, v) => (v ? `${k}=${encodeURIComponent(v)}` : '');
+    const params = [q('to', to?.value), q('subject', subject?.value), q('body', body.value)].filter(Boolean).join('&');
+    location.href = `ms-outlook://compose?${params}`;
+    toast('Opening Outlook…', { action: { label: 'Use my mail app', run: () => { location.href = `mailto:${encodeURIComponent(to?.value ?? '')}?${[q('subject', subject?.value), q('body', body.value)].filter(Boolean).join('&')}`; } } });
+  });
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      await store.saveDraft(box.dataset.draft, { body: body.value, ...(subject ? { subject: subject.value } : {}), ...(to ? { email: to.value } : {}) });
+      toast('Draft saved');
+    } catch (err) { save.disabled = false; failed(err); }
   });
 }
 
@@ -232,29 +278,73 @@ function addSheet(kind = 'todo') {
   });
 }
 
-function settingsSheet() {
+// ---------- routines ----------
+
+let pollTimer = 0;
+// Watch for the Action and the routine to report back: sync every 20 s for up to 6 minutes.
+function pollRuns() {
+  clearInterval(pollTimer);
+  let n = 0;
+  pollTimer = setInterval(() => { store.sync(); if (++n >= 18) clearInterval(pollTimer); }, 20_000);
+}
+
+async function runRoutine(key, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  try {
+    await store.requestRun(key);
+    toast('Run requested. It starts within a minute.');
+    pollRuns();
+  } catch (e) {
+    failed(e);
+    btn.disabled = false;
+    btn.textContent = 'Run now';
+  }
+}
+
+function routinesSheet() {
   openSheet({
-    title: 'Settings',
-    body: settingsSheetHTML(store),
-    onMount({ sheet, close }) {
-      const form = sheet.querySelector('[data-settings]');
-      const status = sheet.querySelector('[data-settings-status]');
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const f = new FormData(form);
-        const patch = { name: f.get('name').trim(), owner: f.get('owner').trim(), repo: f.get('repo').trim(), branch: f.get('branch').trim() || 'main' };
-        const token = f.get('token').trim();
-        if (token) patch.token = token;
-        store.setConfig(patch);
-        status.textContent = 'Connecting…';
-        await store.sync();
-        if (store.error) { status.textContent = store.error.message; return; }
-        close();
-        toast('Connected');
-      });
-      sheet.querySelector('[data-signout]')?.addEventListener('click', () => { store.signOut(); close(); toast('Token removed from this device'); });
+    title: 'Routines',
+    body: `<div data-routines-body>${routinesHTML(store)}</div>
+      <button class="text-btn" type="button" data-action="settings">Change models in Settings</button>`,
+    onMount({ root, sheet }) {
+      const body = sheet.querySelector('[data-routines-body]');
+      const update = () => {
+        if (!root.isConnected) { store.removeEventListener('change', update); return; }
+        body.innerHTML = routinesHTML(store);
+      };
+      store.addEventListener('change', update);
+      store.sync();
     },
   });
+}
+
+document.addEventListener('change', async (e) => {
+  const radio = e.target.closest('[data-model-for]');
+  if (!radio) return;
+  try {
+    await store.setModel(radio.dataset.modelFor, radio.value);
+    toast('Saved. Applies from the next run.');
+  } catch (err) { failed(err); }
+});
+
+function bindSettings(root) {
+  const form = root.querySelector('[data-settings]');
+  if (!form) return;
+  const status = root.querySelector('[data-settings-status]');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(form);
+    const patch = { name: f.get('name').trim(), owner: f.get('owner').trim(), repo: f.get('repo').trim(), branch: f.get('branch').trim() || 'main' };
+    const token = f.get('token').trim();
+    if (token) patch.token = token;
+    store.setConfig(patch);
+    status.textContent = 'Connecting…';
+    await store.sync();
+    if (store.error) { status.textContent = store.error.message; return; }
+    toast('Connected');
+  });
+  root.querySelector('[data-signout]')?.addEventListener('click', () => { store.signOut(); toast('Token removed from this device'); });
 }
 
 // ---------- pull to refresh (iOS rubber band) ----------

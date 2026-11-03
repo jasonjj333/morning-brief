@@ -1,5 +1,5 @@
 import { esc, inline, plain, splitFrontmatter, stripLeadEmoji, splitItem } from './md.js';
-import { Ctx, renderBlocks, rowHTML, parseNote, sections, noteTitle, friendlyName, registry, resolveNote, nextRunLabel } from './render.js';
+import { Ctx, renderBlocks, rowHTML, parseNote, sections, noteTitle, friendlyName, registry, resolveNote, nextRunLabel, draftFor } from './render.js';
 
 const DAILY = 'Daily/';
 const ACTIONS = 'Home Dashboard/Action Items.md';
@@ -117,6 +117,7 @@ const ICON = {
   gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   chev: '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
   search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>',
+  run: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.6l5 3.4-5 3.4z"/></svg>',
 };
 export { ICON };
 
@@ -173,7 +174,7 @@ function upcoming(store) {
 export function todayView(store) {
   return {
     route: 'today', title: 'Today',
-    navRight: () => `<button class="icon-btn" type="button" data-action="settings" aria-label="Settings">${ICON.gear}</button>${addButton('todo')}`,
+    navRight: () => `<button class="icon-btn" type="button" data-action="routines" aria-label="Run routines">${ICON.run}</button><button class="icon-btn" type="button" data-action="settings" aria-label="Settings">${ICON.gear}</button>${addButton('todo')}`,
     render(el) {
       if (!store.connected) { el.innerHTML = `${heroHTML(store, null)}<div class="grid">${connectPanel()}</div>`; return; }
       const path = latestDaily(store);
@@ -550,6 +551,7 @@ export function itemSheetHTML(store, item, { showOpen = true } = {}) {
       ${!isRow && meta ? `<p class="item-meta">${inline(meta, ctx)}</p>` : ''}
       <p class="item-where">${esc(friendlyName(item.file))}${item.section ? ` · ${esc(item.section)}` : ''}</p>
     </div>
+    ${item.kind === 'task' && !item.checked && draftFor(store, main) ? draftHTML(draftFor(store, main)) : ''}
     ${item.kind === 'task' ? `<button class="btn btn-primary btn-wide" type="button" data-sheet="toggle">${item.checked ? 'Mark not done' : 'Mark done'}</button>` : ''}
     <div class="btn-pair">
       <button class="btn" type="button" data-sheet="confirm">Looks right</button>
@@ -602,6 +604,81 @@ export function settingsSheetHTML(store) {
       <button class="btn btn-primary btn-wide" type="submit">Save and sync</button>
       ${c.token ? '<button class="btn btn-danger btn-wide" type="button" data-signout>Forget token on this device</button>' : ''}
     </form>`;
+}
+
+// ---------- routines ----------
+
+const modelLabel = (store, v) => store.models.find((m) => m.value === v)?.label ?? 'Sonnet 5.5';
+
+// What each routine is doing: from the app's run requests, the Action's results and the routines' own log.
+export function routineState(store, key) {
+  const runs = store.runs.filter((r) => r.routine === key);
+  const reqs = store.runRequests.filter((r) => r.routine === key);
+  const req = reqs[reqs.length - 1];
+  const last = [...runs].reverse().find((r) => r.status === 'done' || (r.status === 'failed' && !r.request));
+  const fired = req && [...runs].reverse().find((r) => r.request === req.id);
+  if (req && !req.status) return { busy: true, text: 'Starting…', last };
+  if (fired?.status === 'failed') return { error: fired.error, last };
+  if (fired?.status === 'started' && (!last || last.at < fired.at)) return { busy: true, text: 'Running now', session: fired.session_url, last };
+  return { last };
+}
+
+export function routinesHTML(store, { withModels = false } = {}) {
+  if (!store.routines.length) return '<p class="muted">No routines found in the vault yet.</p>';
+  return `<ul class="routine-list">${store.routines.map((r) => {
+    const st = routineState(store, r.key);
+    const last = st.last ? `Last run ${esc(ago(st.last.at))}${st.last.kind === 'manual' ? ' (manual)' : ''}${st.last.summary ? ` · ${esc(st.last.summary)}` : ''}` : 'No runs logged yet';
+    return `<li class="routine" data-routine="${esc(r.key)}">
+      <div class="routine-head">
+        <div class="routine-text">
+          <p class="routine-name">${esc(r.name)}</p>
+          <p class="routine-meta">${esc(r.schedule)} · ${esc(modelLabel(store, r.model))}</p>
+        </div>
+        <button class="btn btn-run" type="button" data-run="${esc(r.key)}"${st.busy ? ' disabled' : ''}>${st.busy ? esc(st.text) : 'Run now'}</button>
+      </div>
+      <p class="routine-desc">${esc(r.description ?? '')}</p>
+      ${st.error ? `<p class="routine-error">${esc(st.error)}</p>` : ''}
+      ${st.session ? `<a class="mtg-more ext" href="${esc(st.session)}" target="_blank" rel="noopener noreferrer">Watch the run${ICON.chev}</a>` : ''}
+      <p class="routine-last">${last}</p>
+      ${withModels ? `<fieldset class="models"><legend>Model</legend>${store.models.map((m) => `
+        <label class="model-opt"><input type="radio" name="model-${esc(r.key)}" value="${esc(m.value)}" data-model-for="${esc(r.key)}"${(r.model ?? 'sonnet') === m.value ? ' checked' : ''}>
+          <span class="model-text"><span class="model-name">${esc(m.label)}</span><span class="model-note">${esc(m.note ?? '')}</span></span></label>`).join('')}</fieldset>` : ''}
+    </li>`;
+  }).join('')}</ul>`;
+}
+
+export function settingsPageHTML(store) {
+  return `
+    <h1 class="large-title page-title">Settings</h1>
+    <p class="subtitle">Routines, models and the connection to your vault</p>
+    <div class="grid">
+      ${panel({ title: 'Routines', body: `${routinesHTML(store, { withModels: true })}<p class="muted small">Every routine uses Sonnet 5.5 unless you pick another model. A change applies from the routine's next run.</p>`, span: 12 })}
+      ${panel({ title: 'Connection', body: settingsSheetHTML(store), span: 12 })}
+    </div>`;
+}
+
+// ---------- drafts ----------
+
+function slackLink(d) {
+  const c = d.slack?.channel ?? (/archives\/([A-Z0-9]+)/.exec(d.link ?? '') || [])[1];
+  const t = d.slack?.team ?? 'T024F3C1G';
+  return c ? `slack://channel?team=${encodeURIComponent(t)}&id=${encodeURIComponent(c)}` : '';
+}
+
+export function draftHTML(d) {
+  const email = d.channel === 'email';
+  return `<section class="draft" data-draft="${esc(d.id)}">
+    <h3>Draft ${email ? 'email' : 'Slack message'}${d.to ? ` to ${esc(d.to)}` : ''}${d.edited ? ' <span class="pill pill-neutral">Edited</span>' : ''}</h3>
+    ${email ? `<label class="field"><span class="field-label">To</span><input data-draft-to value="${esc(d.email ?? '')}" autocomplete="off"></label>
+    <label class="field"><span class="field-label">Subject</span><input data-draft-subject value="${esc(d.subject ?? '')}"></label>` : ''}
+    <label class="field"><span class="field-label">Message</span><textarea rows="6" data-draft-body>${esc(d.body ?? '')}</textarea></label>
+    <div class="btn-pair">
+      <button class="btn btn-primary" type="button" data-draft-open="${email ? 'email' : 'slack'}" data-slack="${esc(email ? '' : slackLink(d))}">${email ? 'Open in Outlook' : 'Open in Slack'}</button>
+      <button class="btn" type="button" data-draft-copy>Copy</button>
+    </div>
+    <button class="btn btn-wide" type="button" data-draft-save disabled>Save my edits</button>
+    <p class="muted small">Nothing is sent for you. ${email ? 'Outlook opens a new email with this filled in.' : 'The message is copied; paste it into the conversation.'}</p>
+  </section>`;
 }
 
 export { registry };

@@ -531,6 +531,34 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .mtg-more svg { width: 16px; height: 16px; }
 .row.mtg.is-past .row-time { color: var(--control); }
 
+/* Routines */
+.routine-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.routine { background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-row); padding: 14px; }
+.routine-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.routine-name { margin: 0; font-size: 16px; font-weight: 600; }
+.routine-meta, .routine-last { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.routine-desc { margin: 8px 0 0; font-size: 14px; }
+.routine-last { margin-top: 8px; }
+.routine-error { margin: 8px 0 0; font-size: 13px; color: var(--negative); }
+.btn.btn-run { height: 36px; padding: 0 16px; font-size: 14px; background: var(--text); color: var(--ground); flex: none; }
+.btn.btn-run:disabled { background: var(--surface-2); color: var(--muted); opacity: 1; }
+.models { border: 0; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.models legend { font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 6px; padding: 0; }
+.model-opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); cursor: pointer; }
+.model-opt:has(input:checked) { background: var(--accent-tint); }
+.model-opt input { accent-color: var(--accent); margin: 3px 0 0; width: 18px; height: 18px; flex: none; }
+.model-text { display: flex; flex-direction: column; }
+.model-name { font-size: 15px; font-weight: 600; }
+.model-note { font-size: 13px; color: var(--muted); }
+
+/* Drafts */
+.draft { background: var(--surface); border-radius: 18px; padding: 14px 16px; margin-bottom: 14px; }
+.draft h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.draft h3 .pill { margin: 0; }
+.draft .field { margin-top: 12px; }
+.draft .btn-pair { margin-top: 12px; }
+.draft .muted.small { margin: 10px 0 0; }
+
 /* Yesterday */
 .tldr { font-size: 16px; line-height: 1.5; margin: 0 4px 16px; max-width: 70ch; }
 .tldr p { margin: 0; }

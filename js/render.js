@@ -66,8 +66,16 @@ export function statusOf(store, file, raw) {
   };
 }
 
+const norm = (t) => plain(t).toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+export function draftFor(store, text) {
+  const n = norm(splitItem(text).main);
+  if (!n) return null;
+  return store.drafts.find((d) => { const m = norm(d.item ?? ''); return m && (m === n || n.includes(m) || m.includes(n)); }) ?? null;
+}
+
 function pills(st) {
   const out = [];
+  if (st.draft) out.push('<span class="pill pill-accent">Draft ready</span>');
   if (st.remove) out.push(`<span class="pill pill-negative">Removing at ${nextRunLabel()}</span>`);
   if (st.confirm) out.push('<span class="pill pill-positive">Confirmed</span>');
   if (st.note) out.push('<span class="pill pill-neutral">Note sent</span>');
@@ -80,6 +88,7 @@ export function rowHTML(ctx, { text, line, task = false, checked = false, kind =
   const item = { file: ctx.file, line, raw, text: plain(text), kind: task ? 'task' : kind, checked, section: ctx.section };
   const id = register(item);
   const st = statusOf(ctx.store, ctx.file, raw);
+  if (task && !checked) st.draft = !!draftFor(ctx.store, text);
   const { main, meta } = splitItem(text);
   const cls = ['row', task ? 'is-task' : '', checked ? 'is-done' : '', st.remove ? 'is-removing' : ''].filter(Boolean).join(' ');
   return `<li class="${cls}" data-iid="${id}">
