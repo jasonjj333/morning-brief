@@ -561,10 +561,7 @@ export function itemSheetHTML(store, item, { showOpen = true } = {}) {
     </div>
     ${item.kind === 'task' && !item.checked && draftFor(store, main) ? draftHTML(draftFor(store, main)) : ''}
     ${item.kind === 'task' ? `<button class="btn btn-primary btn-wide" type="button" data-sheet="toggle">${item.checked ? 'Mark not done' : 'Mark done'}</button>` : ''}
-    <div class="btn-pair">
-      <button class="btn" type="button" data-sheet="confirm">Looks right</button>
-      <button class="btn btn-danger" type="button" data-sheet="remove">Remove</button>
-    </div>
+    <button class="btn btn-danger btn-wide" type="button" data-sheet="remove">Remove</button>
     <label class="field">
       <span class="field-label">Tell Claude what to change</span>
       <textarea rows="3" placeholder="It moved to Friday. Or: this is done, someone else owns it now." data-sheet-note></textarea>

@@ -1,5 +1,5 @@
 import { Store, target } from './store.js';
-import { nextRunLabel } from './render.js';
+import { nextRunLabel, rowPills } from './render.js';
 import { Navigator } from './nav.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
@@ -34,15 +34,35 @@ const nav = new Navigator($('#stage'), $('.tabbar'), TABS, makeView);
 
 // ---------- re-render on data changes ----------
 
-let raf = 0;
-store.addEventListener('change', () => {
+// 'data' (the vault changed elsewhere) redraws everything. 'local' (a save from this device) redraws only the
+// pages you can't see and patches the rows in front of you, so the page never jumps. 'status' touches the chrome.
+const RANK = { status: 0, local: 1, data: 2 };
+let raf = 0, pendingKind = 'status';
+store.addEventListener('change', (e) => {
+  const kind = e.detail?.kind ?? 'data';
+  if (RANK[kind] > RANK[pendingKind]) pendingKind = kind;
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => {
-    registry.clear();
-    nav.refreshAll();
+    const k = pendingKind;
+    pendingKind = 'status';
+    if (k === 'data') { registry.clear(); nav.refreshAll(); }
+    else if (k === 'local') { nav.refreshAll({ except: nav.current }); patchRows(nav.current?.el); }
     chrome();
   });
 });
+
+function patchRows(root) {
+  if (!root) return;
+  for (const row of root.querySelectorAll('.row[data-iid]')) {
+    const item = registry.get(row.dataset.iid);
+    if (!item) continue;
+    const { html, removing } = rowPills(store, item);
+    const slot = row.querySelector('.row-pills');
+    if (slot && slot.innerHTML !== html) slot.innerHTML = html;
+    row.classList.toggle('is-removing', removing);
+    if (item.kind === 'task') row.classList.toggle('is-done', !!item.checked);
+  }
+}
 
 function chrome() {
   $('[data-bind="scope"]').textContent = store.dev ? 'Local preview' : `${store.config.owner}/${store.config.repo}`;

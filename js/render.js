@@ -83,6 +83,13 @@ function pills(st) {
 }
 
 // A swipeable row: tasks get a checkbox and swipe-right-to-complete; every row can be swiped left.
+// Pills for an on-screen item, recomputed after a save without redrawing the page.
+export function rowPills(store, item) {
+  const st = statusOf(store, item.file, item.raw);
+  if (item.kind === 'task' && !item.checked) st.draft = !!draftFor(store, item.text);
+  return { html: pills(st), removing: st.remove };
+}
+
 export function rowHTML(ctx, { text, line, task = false, checked = false, kind = 'bullet', extra = '' }) {
   const raw = ctx.lines[line] ?? '';
   const item = { file: ctx.file, line, raw, text: plain(text), kind: task ? 'task' : kind, checked, section: ctx.section };
@@ -101,7 +108,7 @@ export function rowHTML(ctx, { text, line, task = false, checked = false, kind =
       <div class="row-text">
         <div class="row-main">${inline(main, ctx)}</div>
         ${meta ? `<div class="row-meta">${inline(meta, ctx)}</div>` : ''}
-        ${pills(st)}${extra}
+        <div class="row-pills">${pills(st)}</div>${extra}
       </div>
     </div>
   </li>`;

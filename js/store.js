@@ -57,7 +57,8 @@ class GitHubSource {
   async write(path, text, sha, message) {
     const body = { message, content: b64encode(text), branch: this.cfg.branch, ...(sha ? { sha } : {}) };
     const r = await this.api(`/contents/${encPath(path)}`, { method: 'PUT', body: JSON.stringify(body) });
-    return { sha: r.content.sha };
+    const c = r.commit;
+    return { sha: r.content.sha, commit: c ? { date: c.committer?.date, message: (c.message ?? '').split('\n')[0] } : null };
   }
   async lastCommit() {
     const r = await this.api(`/commits?sha=${encodeURIComponent(this.cfg.branch)}&per_page=1`);
@@ -121,7 +122,8 @@ export class Store extends EventTarget {
   }
 
   persist() { write(CACHE_KEY, { tree: this.tree, blobs: this.blobs, commit: this.commit, syncedAt: this.syncedAt }); }
-  emit() { this.dispatchEvent(new Event('change')); }
+  // kind: 'status' (syncing, errors), 'local' (this device saved something), 'data' (the vault changed elsewhere).
+  emit(kind = 'data') { this.dispatchEvent(new CustomEvent('change', { detail: { kind } })); }
 
   text(path) {
     const e = this.tree.find((x) => x.path === path);
@@ -132,7 +134,9 @@ export class Store extends EventTarget {
 
   async sync() {
     if (!this.connected || this.syncing) return;
-    this.syncing = true; this.error = null; this.emit();
+    this.syncing = true; this.error = null; this.emit('status');
+    const before = this.tree.map((e) => e.sha).join() + (this.commit?.date ?? '');
+    let changed = false;
     try {
       const src = this.source;
       const [tree, commit] = await Promise.all([src.tree(), src.lastCommit().catch(() => null)]);
@@ -148,13 +152,14 @@ export class Store extends EventTarget {
       this.tree = wanted;
       this.commit = commit;
       this.syncedAt = Date.now();
+      changed = before !== this.tree.map((e) => e.sha).join() + (this.commit?.date ?? '');
       this.persist();
       await this.flushOutbox();
     } catch (e) {
       this.error = e;
     } finally {
       this.syncing = false;
-      this.emit();
+      this.emit(changed ? 'data' : 'status');
     }
   }
 
@@ -170,8 +175,10 @@ export class Store extends EventTarget {
         const entry = this.tree.find((x) => x.path === path);
         if (entry) entry.sha = res.sha; else this.tree.push({ path, sha: res.sha });
         this.blobs[res.sha] = next;
+        // Our own commit is the newest one now; remember it so the next sync doesn't treat it as news.
+        if (res.commit?.date) this.commit = res.commit;
         this.persist();
-        this.emit();
+        this.emit('local');
         return true;
       } catch (e) {
         if ((e.status === 409 || e.status === 422) && attempt < 2) continue;
@@ -191,7 +198,7 @@ export class Store extends EventTarget {
     const item = { id: crypto.randomUUID(), at: new Date().toISOString(), ...entry };
     this.outbox.push(item);
     write(OUTBOX_KEY, this.outbox);
-    this.emit();
+    this.emit('local');
     await this.flushOutbox();
     return item;
   }
@@ -200,7 +207,7 @@ export class Store extends EventTarget {
     const before = this.outbox.length;
     this.outbox = this.outbox.filter((x) => x.id !== id);
     write(OUTBOX_KEY, this.outbox);
-    if (this.outbox.length !== before) { this.emit(); return; }
+    if (this.outbox.length !== before) { this.emit('local'); return; }
     await this.mutate('Feedback/inbox.json', (text) => {
       const doc = safeJson(text);
       doc.items = (doc.items ?? []).filter((x) => x.id !== id);
@@ -221,10 +228,10 @@ export class Store extends EventTarget {
       const sent = new Set(batch.map((x) => x.id));
       this.outbox = this.outbox.filter((x) => !sent.has(x.id));
       write(OUTBOX_KEY, this.outbox);
-      this.emit();
+      this.emit('local');
     } catch (e) {
       this.error = e;
-      this.emit();
+      this.emit('status');
       throw e;
     }
   }
@@ -271,13 +278,17 @@ export class Store extends EventTarget {
 
   // Toggle "- [ ]" on one line, found by its text so a shifted line number still works.
   async toggleTask(item, done) {
+    let line = item.line, raw = item.raw;
     await this.mutate(item.file, (text) => {
       const lines = text.split('\n');
       let n = lines[item.line] === item.raw ? item.line : lines.indexOf(item.raw);
       if (n < 0) throw Object.assign(new Error('That line changed since this page loaded. Pull to refresh and try again.'), { status: 0 });
       lines[n] = lines[n].replace(/\[( |x|X)\]/, done ? '[x]' : '[ ]');
+      line = n; raw = lines[n];
       return lines.join('\n');
     }, `brief: ${done ? 'done' : 'reopen'} — ${item.text.slice(0, 60)}`);
+    // The page isn't redrawn after a save, so keep the on-screen item in step with the file.
+    Object.assign(item, { line, raw, checked: done });
     // Tell the routine, so it can mirror the change into the other notes that list this item.
     this.outbox.push({ id: crypto.randomUUID(), at: new Date().toISOString(), action: done ? 'done' : 'reopen', target: target(item), note: '' });
     write(OUTBOX_KEY, this.outbox);

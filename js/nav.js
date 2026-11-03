@@ -68,6 +68,7 @@ export class Navigator {
       animate(next.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' });
       prev.el.hidden = true;
     } else next.el.hidden = false;
+    this.freshen(this.current, next);
     if (this.current) this.onScroll(this.current);
     this.current?.view.onShow?.();
     if (record) history.replaceState({ tab: tabId, routes: this.routes }, '');
@@ -107,14 +108,21 @@ export class Navigator {
     p.el.querySelector('.nav-title').textContent = view.title;
     p.el.querySelector('.nav-right').innerHTML = view.navRight?.() ?? '';
     const y = p.scroll.scrollTop;
+    p.dirty = false;
     view.render(p.content);
     p.scroll.scrollTop = y;
     this.onScroll(p);
   }
 
-  refreshAll() {
-    for (const s of this.stacks.values()) for (const p of s.pages) this.renderPage(p, s);
+  refreshAll({ except = null } = {}) {
+    for (const s of this.stacks.values()) for (const p of s.pages) {
+      if (p === except) { p.dirty = true; continue; }
+      this.renderPage(p, s);
+    }
   }
+
+  // A page left stale on purpose (after a local save) is redrawn the next time it comes into view.
+  freshen(p, stack) { if (p?.dirty) this.renderPage(p, stack); }
 
   wireScroll(p) {
     let ticking = false;
@@ -176,6 +184,7 @@ export class Navigator {
     under.el.inert = false;
     under.el.style.transform = '';
     under.el.querySelector('.shade').style.opacity = '';
+    this.freshen(under, stack);
     under.view.onShow?.();
   }
 
@@ -198,6 +207,7 @@ export class Navigator {
       under.el.style.transform = '';
       under.el.querySelector('.shade').style.opacity = '';
       this.busy = false;
+      this.freshen(under, stack);
       under.view.onShow?.();
     });
   }
