@@ -519,6 +519,15 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   transition: transform 0.15s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .mtg-join:active { transform: scale(0.95); }
+.mtg-record {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 14px 0 12px;
+  border-radius: 999px; background: var(--pill-negative-bg); color: var(--pill-negative-ink) !important;
+  font-size: 13px; font-weight: 600; text-decoration: none;
+  transition: transform 0.15s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.mtg-record:active { transform: scale(0.95); }
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--negative); animation: rec-pulse 1.6s ease-in-out infinite; }
+@keyframes rec-pulse { 50% { opacity: 0.35; } }
 .mtg-link {
   display: inline-flex; align-items: center; height: 30px; padding: 0 12px;
   border-radius: 999px; background: var(--surface-2); color: var(--text) !important;

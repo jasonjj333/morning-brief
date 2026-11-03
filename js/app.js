@@ -7,7 +7,7 @@ import { animate, spring } from './motion.js';
 import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
   itemSheetHTML, addSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
-  routinesHTML, settingsPageHTML,
+  routinesHTML, settingsPageHTML, RECORD_LEAD,
 } from './views.js';
 
 const store = new Store();
@@ -87,6 +87,14 @@ function openInApp(kind, web) {
 // ---------- taps ----------
 
 document.addEventListener('click', (e) => {
+  const rec = e.target.closest('a.mtg-record');
+  if (rec) {
+    // Let the link open Glean in a new tab; copy the name in case Glean doesn't fill the title.
+    e.stopPropagation();
+    navigator.clipboard?.writeText(rec.dataset.title).catch(() => {});
+    toast(`Opening Glean. "${rec.dataset.title}" is copied if you need to paste the title.`);
+    return;
+  }
   const appLink = e.target.closest('a.mtg-join, a.mtg-link');
   if (appLink) {
     e.preventDefault();
@@ -367,12 +375,16 @@ addEventListener('touchend', () => {
 
 // ---------- meeting countdowns ----------
 
-// Every 15 s: refresh "in 23 min"; when a meeting ends, re-render so Join gives way to the recap.
+// Every 15 s: refresh "in 23 min". Re-render when a meeting ends (Join gives way to the recap) or comes within
+// 5 minutes of starting (Record in Glean appears).
 function tickMeetings() {
   let ended = false;
+  const now = Date.now();
   for (const el of document.querySelectorAll('.mtg-status[data-start]')) {
     const st = meetingStatus(+el.dataset.start, +el.dataset.end);
     if (st.cls === 'is-ended' && !el.classList.contains('is-ended')) ended = true;
+    const wantRecord = now >= +el.dataset.start - RECORD_LEAD && now < +el.dataset.end;
+    if (wantRecord !== !!el.parentElement.querySelector('.mtg-record')) ended = true;
     el.textContent = st.text;
     el.className = `mtg-status ${st.cls}`;
   }
