@@ -50,6 +50,64 @@ function minutesOf(time) {
   return h * 60 + (+m[2] || 0);
 }
 
+// The meetings table: columns are found by header, so older three-column briefs still read.
+const firstUrl = (cell) => (/\((https?:[^)\s]+)\)/.exec(cell ?? '') || /(https?:\/\/[^\s)|]+)/.exec(cell ?? '') || [])[1] ?? null;
+
+export function meetingRows(table, dateStr) {
+  const head = (table?.head ?? []).map((x) => plain(x).toLowerCase());
+  const col = (re, d) => { const i = head.findIndex((x) => re.test(x)); return i >= 0 ? i : d; };
+  const ci = { time: col(/time/, 0), name: col(/meeting/, 1), prep: col(/prep|note/, 2), join: col(/join/, -1), outlook: col(/outlook/, -1), recap: col(/recap/, -1) };
+  const day = parseYmd(dateStr) ?? today();
+  const at = (m) => (m == null ? null : new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(m / 60), m % 60).getTime());
+  return (table?.rows ?? []).filter((r) => r.cells.some(Boolean)).map((r) => {
+    const get = (i) => (i >= 0 ? r.cells[i] ?? '' : '');
+    const time = plain(get(ci.time));
+    const [a, b] = time.split(/\s*[–-]\s*/);
+    const sm = minutesOf(a);
+    let em = b ? minutesOf(b) : null;
+    if (sm != null && (em == null || em <= sm)) em = sm + 30;
+    return {
+      ...r, timeLabel: a || time || '—', start: at(sm), end: at(em),
+      name: get(ci.name), prep: get(ci.prep), join: firstUrl(get(ci.join)), outlook: firstUrl(get(ci.outlook)), recap: get(ci.recap),
+      canceled: /~~/.test(get(ci.name)),
+    };
+  });
+}
+
+// "in 23 min" within the hour, like Outlook; "Now · 12 min left" while it runs.
+export function meetingStatus(start, end, now = Date.now()) {
+  if (start == null) return { text: '', cls: '' };
+  if (now >= end) return { text: 'Ended', cls: 'is-ended' };
+  if (now >= start) return { text: `Now · ${Math.max(1, Math.round((end - now) / 60000))} min left`, cls: 'is-now' };
+  const m = Math.round((start - now) / 60000);
+  if (m <= 60) return { text: m <= 1 ? 'Starting now' : `in ${m} min`, cls: 'is-soon' };
+  const h = Math.floor(m / 60), mm = m % 60;
+  return { text: `in ${h} h${mm ? ` ${mm} min` : ''}`, cls: '' };
+}
+
+function meetingHTML(store, ctx, m, isToday) {
+  const st = isToday ? meetingStatus(m.start, m.end) : { text: '', cls: '' };
+  const ended = st.cls === 'is-ended';
+  const status = st.text ? `<span class="mtg-status ${st.cls}" data-start="${m.start}" data-end="${m.end}">${esc(st.text)}</span>` : '';
+  const join = m.join && !ended && !m.canceled ? `<a class="mtg-join ext" href="${esc(m.join)}" target="_blank" rel="noopener noreferrer">Join</a>` : '';
+  const outlook = m.outlook ? `<a class="mtg-link ext" href="${esc(m.outlook)}" target="_blank" rel="noopener noreferrer">Outlook</a>` : '';
+  let recap = '';
+  if (ended && !m.canceled) {
+    const link = /\[\[([^\]|]+)/.exec(m.recap ?? '')?.[1];
+    const path = link ? resolveNote(store, link) : resolveNote(store, `${noteTitle(ctx.file)} - ${plain(m.name)}`);
+    const summary = (m.recap ?? '').replace(/\s*·?\s*\[\[[^\]]+\]\]\s*$/, '').trim();
+    recap = summary
+      ? `<div class="mtg-recap">${inline(summary, ctx)}</div>`
+      : `<div class="mtg-recap muted">Recap appears here once the transcript is ready.</div>`;
+    if (path) recap += `<a class="mtg-more wl" href="#" data-note="${esc(path)}">View full breakdown${ICON.chev}</a>`;
+  }
+  const line = status || join || outlook ? `<div class="mtg-line">${status}${join}${outlook}</div>` : '';
+  const text = ended || !m.prep ? m.name : `${m.name} — ${m.prep}`;
+  return rowHTML(ctx, { text, line: m.line, kind: 'row', extra: line + recap })
+    .replace('<li class="row', `<li class="row mtg${ended ? ' is-past' : ''}`)
+    .replace('<div class="row-body">', `<div class="row-body"><span class="row-time${m.canceled ? ' is-canceled' : ''}">${esc(m.timeLabel)}</span>`);
+}
+
 const nameHue = (name) => { let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360; return Math.round(h / 60) * 60 + 20; };
 
 // ---------- shared bits ----------
@@ -134,12 +192,11 @@ export function todayView(store) {
 
       const meet = sec.find(/meeting/i);
       const meetTable = meet?.blocks.find((b) => b.t === 'table');
-      const meetings = (meetTable?.rows ?? []).filter((r) => r.cells.some(Boolean)).map((r) => ({ ...r, canceled: /~~/.test(r.cells[1] ?? '') }));
+      const meetings = meetingRows(meetTable, data.date);
       const live = meetings.filter((m) => !m.canceled);
-      const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
       const isToday = sameDay(parseYmd(data.date), today());
-      const timed = live.filter((m) => minutesOf(m.cells[0]) != null);
-      const nextMeeting = isToday ? timed.find((m) => minutesOf(m.cells[0]) >= nowMin - 15) : timed[0];
+      const timed = live.filter((m) => m.start != null);
+      const nextMeeting = isToday ? timed.find((m) => m.end > Date.now()) : timed[0];
 
       const week = sec.find(/attention|this week/i);
       const weekTable = week?.blocks.find((b) => b.t === 'table');
@@ -157,7 +214,7 @@ export function todayView(store) {
       // Tiles: one container split into four counts.
       const tiles = `<div class="tiles span-12">
         <div class="tile"><span class="tile-label">To do today</span><span class="tile-value">${todoOpen}</span><span class="tile-cap">${todoDone ? `${todoDone} done` : todoOpen ? 'None done yet' : 'All clear'}</span></div>
-        <div class="tile"><span class="tile-label">Meetings today</span><span class="tile-value">${isToday ? live.length : '—'}</span><span class="tile-cap">${nextMeeting ? `Next ${esc(nextMeeting.cells[0])} · ${esc(plain(nextMeeting.cells[1]))}` : isToday ? 'Nothing left today' : 'Brief is from ' + esc(data.date ?? '')}</span></div>
+        <div class="tile"><span class="tile-label">Meetings today</span><span class="tile-value">${isToday ? live.length : '—'}</span><span class="tile-cap">${nextMeeting ? `${isToday && meetingStatus(nextMeeting.start, nextMeeting.end).cls ? esc(meetingStatus(nextMeeting.start, nextMeeting.end).text) : `Next ${esc(nextMeeting.timeLabel)}`} · ${esc(plain(nextMeeting.name))}` : isToday ? 'Nothing left today' : 'Brief is from ' + esc(data.date ?? '')}</span></div>
         <div class="tile"><span class="tile-label">Due this week</span><span class="tile-value">${weekRows.length}</span><span class="tile-cap">${weekRows[0] ? `First ${esc(plain(weekRows[0].cells[0]))}` : 'Nothing due'}</span></div>
         <div class="tile"><span class="tile-label">Sent to Claude</span><span class="tile-value">${pending.length}</span><span class="tile-cap">${pending.length ? `Applied at ${nextRunLabel()}` : 'Nothing waiting'}</span></div>
       </div>`;
@@ -166,10 +223,7 @@ export function todayView(store) {
       const topBody = topList ? `<ol class="rows rows-top">${topList.items.map((it) => rowHTML(ctx, { text: it.text, line: it.line })).join('')}</ol>` : '<p class="muted">No priorities in this brief.</p>';
 
       ctx.section = "Today's meetings";
-      const meetBody = meetings.length ? `<ul class="rows">${meetings.map((m) => rowHTML(ctx, {
-        text: `${m.cells[1]}${m.cells[2] ? ' — ' + m.cells[2] : ''}`, line: m.line, kind: 'row',
-        extra: '',
-      }).replace('<div class="row-body">', `<div class="row-body"><span class="row-time${m.canceled ? ' is-canceled' : ''}">${esc(m.cells[0])}</span>`)).join('')}</ul>` : '<p class="muted">No meetings.</p>';
+      const meetBody = meetings.length ? `<ul class="rows">${meetings.map((m) => meetingHTML(store, ctx, m, isToday)).join('')}</ul>` : '<p class="muted">No meetings.</p>';
 
       ctx.section = 'To-do today';
       const todoBody = (todoList ? renderBlocks([todoList], ctx) : '<p class="muted">Nothing to do.</p>')

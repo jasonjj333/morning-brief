@@ -507,6 +507,30 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .pill-neutral { background: var(--pill-neutral-bg); color: var(--pill-neutral-ink); }
 .pill-accent { background: var(--pill-accent-bg); color: var(--pill-accent-ink); }
 
+/* Meetings: countdown, join and recap */
+.mtg-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.mtg-status { font-size: 13px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mtg-status.is-soon { color: var(--accent); font-weight: 600; }
+.mtg-status.is-now { color: var(--positive); font-weight: 600; }
+.mtg-join {
+  display: inline-flex; align-items: center; height: 30px; padding: 0 14px;
+  border-radius: 999px; background: var(--accent); color: #fff !important;
+  font-size: 13px; font-weight: 600; text-decoration: none;
+  transition: transform 0.15s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.mtg-join:active { transform: scale(0.95); }
+.mtg-link {
+  display: inline-flex; align-items: center; height: 30px; padding: 0 12px;
+  border-radius: 999px; background: var(--surface-2); color: var(--text) !important;
+  font-size: 13px; font-weight: 500; text-decoration: none;
+}
+.mtg-link:active { opacity: 0.6; }
+.mtg-recap { font-size: 14px; line-height: 1.45; margin-top: 8px; }
+.mtg-recap.muted { font-size: 13px; }
+.mtg-more { display: inline-flex; align-items: center; gap: 2px; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--accent) !important; text-decoration: none !important; }
+.mtg-more svg { width: 16px; height: 16px; }
+.row.mtg.is-past .row-time { color: var(--control); }
+
 /* Yesterday */
 .tldr { font-size: 16px; line-height: 1.5; margin: 0 4px 16px; max-width: 70ch; }
 .tldr p { margin: 0; }

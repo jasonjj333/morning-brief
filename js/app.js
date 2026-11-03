@@ -6,7 +6,7 @@ import { wireSwipes } from './swipe.js';
 import { animate, spring } from './motion.js';
 import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
-  itemSheetHTML, addSheetHTML, settingsSheetHTML, dayItemsHTML, placeThumb, registry, ago,
+  itemSheetHTML, addSheetHTML, settingsSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
 } from './views.js';
 
 const store = new Store();
@@ -235,10 +235,27 @@ addEventListener('touchend', () => {
   store.sync().then(() => { if (!store.error) toast('Up to date'); });
 }, { passive: true });
 
+// ---------- meeting countdowns ----------
+
+// Every 15 s: refresh "in 23 min"; when a meeting ends, re-render so Join gives way to the recap.
+function tickMeetings() {
+  let ended = false;
+  for (const el of document.querySelectorAll('.mtg-status[data-start]')) {
+    const st = meetingStatus(+el.dataset.start, +el.dataset.end);
+    if (st.cls === 'is-ended' && !el.classList.contains('is-ended')) ended = true;
+    el.textContent = st.text;
+    el.className = `mtg-status ${st.cls}`;
+  }
+  if (ended) { registry.clear(); nav.refreshAll(); }
+}
+setInterval(tickMeetings, 15_000);
+
 // ---------- keep fresh ----------
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && Date.now() - store.syncedAt > 60_000) store.sync();
+  if (document.visibilityState !== 'visible') return;
+  tickMeetings();
+  if (Date.now() - store.syncedAt > 60_000) store.sync();
 });
 addEventListener('online', () => store.sync());
 
