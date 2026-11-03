@@ -7,7 +7,7 @@ import { animate, spring } from './motion.js';
 import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
   itemSheetHTML, addSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
-  routinesHTML, settingsPageHTML, RECORD_LEAD,
+  routinesHTML, settingsPageHTML, RECORD_LEAD, RECORD_ON_ALL_MEETINGS,
 } from './views.js';
 
 const store = new Store();
@@ -69,6 +69,8 @@ function appUrl(kind, web) {
     }
     if (kind === 'join' && /teams\.(microsoft|live)\.com$/.test(u.hostname)) return web.replace(/^https:/, 'msteams:');
     if (kind === 'outlook') return 'ms-outlook://events';
+    // glean://<web app host>/<path> opens that page inside the Glean desktop app, where meeting notes record.
+    if (kind === 'record' && u.hostname === 'app.glean.com') return `glean://${u.host}${u.pathname}${u.search}`;
   } catch { /* not a URL */ }
   return null;
 }
@@ -79,7 +81,7 @@ function openInApp(kind, web) {
   const app = appUrl(kind, web);
   if (!app) { window.open(web, '_blank', 'noopener'); return; }
   location.href = app;
-  toast(kind === 'join' ? 'Opening the meeting app…' : 'Opening Outlook…', {
+  toast(kind === 'join' ? 'Opening the meeting app…' : kind === 'record' ? 'Opening Glean… The meeting name is copied for the title.' : 'Opening Outlook…', {
     action: { label: 'Open in browser', run: () => window.open(web, '_blank', 'noopener') },
   });
 }
@@ -89,10 +91,12 @@ function openInApp(kind, web) {
 document.addEventListener('click', (e) => {
   const rec = e.target.closest('a.mtg-record');
   if (rec) {
-    // Let the link open Glean in a new tab; copy the name in case Glean doesn't fill the title.
     e.stopPropagation();
     navigator.clipboard?.writeText(rec.dataset.title).catch(() => {});
-    toast(`Opening Glean. "${rec.dataset.title}" is copied if you need to paste the title.`);
+    // Phones have no Glean desktop app: let the link open Glean on the web.
+    if (isMobile) { toast(`"${rec.dataset.title}" is copied if you need to paste the title.`); return; }
+    e.preventDefault();
+    openInApp('record', rec.href);
     return;
   }
   const appLink = e.target.closest('a.mtg-join, a.mtg-link');
@@ -383,7 +387,7 @@ function tickMeetings() {
   for (const el of document.querySelectorAll('.mtg-status[data-start]')) {
     const st = meetingStatus(+el.dataset.start, +el.dataset.end);
     if (st.cls === 'is-ended' && !el.classList.contains('is-ended')) ended = true;
-    const wantRecord = now >= +el.dataset.start - RECORD_LEAD && now < +el.dataset.end;
+    const wantRecord = RECORD_ON_ALL_MEETINGS || (now >= +el.dataset.start - RECORD_LEAD && now < +el.dataset.end);
     if (wantRecord !== !!el.parentElement.querySelector('.mtg-record')) ended = true;
     el.textContent = st.text;
     el.className = `mtg-status ${st.cls}`;

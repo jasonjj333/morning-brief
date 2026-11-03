@@ -75,6 +75,9 @@ export function meetingRows(table, dateStr) {
 }
 
 export const RECORD_LEAD = 5 * 60_000;
+// TEST SWITCH: true shows Record in Glean on every meeting. Set it back to false to show it only from 5 minutes
+// before a meeting until it ends.
+export const RECORD_ON_ALL_MEETINGS = true;
 // Glean's web app starts a new meeting note at /notes/new. Glean doesn't document a title parameter, so the app
 // also copies the meeting name when the button is used.
 export const gleanNoteUrl = (title) => `https://app.glean.com/notes/new?title=${encodeURIComponent(title)}`;
@@ -107,7 +110,7 @@ function meetingHTML(store, ctx, m, isToday) {
     if (path) recap += `<a class="mtg-more wl" href="#" data-note="${esc(path)}">View full breakdown${ICON.chev}</a>`;
   }
   // Record in Glean: from 5 minutes before the start until the meeting ends.
-  const recordable = isToday && !m.canceled && m.start != null && Date.now() >= m.start - RECORD_LEAD && Date.now() < m.end;
+  const recordable = !m.canceled && (RECORD_ON_ALL_MEETINGS || (isToday && m.start != null && Date.now() >= m.start - RECORD_LEAD && Date.now() < m.end));
   const record = recordable ? `<a class="mtg-record ext" href="${esc(gleanNoteUrl(plain(m.name)))}" target="_blank" rel="noopener noreferrer" data-title="${esc(plain(m.name))}"><span class="rec-dot" aria-hidden="true"></span>Record in Glean</a>` : '';
   const line = status || join || outlook ? `<div class="mtg-line">${status}${record}${join}${outlook}</div>` : '';
   const text = ended || !m.prep ? m.name : `${m.name} — ${m.prep}`;
