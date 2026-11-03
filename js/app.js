@@ -46,9 +46,55 @@ function chrome() {
   document.body.classList.toggle('is-syncing', store.syncing);
 }
 
+// ---------- open meetings in their apps ----------
+
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Zoom: zoomus:// on phones, zoommtg:// on desktop. Teams: msteams://. Outlook can't open one event from a
+// link, so it opens the app's calendar.
+function appUrl(kind, web) {
+  try {
+    const u = new URL(web);
+    if (kind === 'join' && /zoom\.us$/.test(u.hostname)) {
+      const confno = (u.pathname.match(/\/j\/(\d+)/) || [])[1];
+      if (!confno) return null;
+      const pwd = u.searchParams.get('pwd');
+      const q = `confno=${confno}${pwd ? `&pwd=${encodeURIComponent(pwd)}` : ''}`;
+      return isMobile ? `zoomus://zoom.us/join?${q}` : `zoommtg://${u.hostname}/join?action=join&${q}`;
+    }
+    if (kind === 'join' && /teams\.(microsoft|live)\.com$/.test(u.hostname)) return web.replace(/^https:/, 'msteams:');
+    if (kind === 'outlook') return 'ms-outlook://events';
+  } catch { /* not a URL */ }
+  return null;
+}
+
+// Try the app; if the page is still in front a moment later, the app isn't installed, so open the web link.
+function openInApp(kind, web) {
+  const app = appUrl(kind, web);
+  if (!app) { window.open(web, '_blank', 'noopener'); return; }
+  let left = false;
+  const away = () => { left = true; };
+  addEventListener('blur', away, { once: true });
+  document.addEventListener('visibilitychange', away, { once: true });
+  location.href = app;
+  setTimeout(() => {
+    removeEventListener('blur', away);
+    document.removeEventListener('visibilitychange', away);
+    // Too late for a pop-up (browsers block it), so fall back in this tab.
+    if (!left && document.visibilityState === 'visible') location.assign(web);
+  }, 1400);
+}
+
 // ---------- taps ----------
 
 document.addEventListener('click', (e) => {
+  const appLink = e.target.closest('a.mtg-join, a.mtg-link');
+  if (appLink) {
+    e.preventDefault();
+    e.stopPropagation();
+    openInApp(appLink.classList.contains('mtg-join') ? 'join' : 'outlook', appLink.href);
+    return;
+  }
   const link = e.target.closest('a[data-note]');
   if (link) {
     e.preventDefault();
