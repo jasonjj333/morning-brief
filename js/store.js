@@ -271,6 +271,9 @@ export class Store extends EventTarget {
   get models() { return this.routinesDoc.models ?? []; }
   get runs() { return this.json('Feedback/runs.json', { runs: [] }).runs ?? []; }
   get runRequests() { return this.json('Feedback/run-requests.json', { requests: [] }).requests ?? []; }
+  get filtered() { return this.json('Feedback/filtered.json', null); }
+  get blocked() { return this.json('Feedback/blocked.json', { blocked: [] }).blocked ?? []; }
+  get mailActions() { return this.json('Feedback/mail-actions.json', { actions: [] }).actions ?? []; }
   get drafts() { return this.json('Feedback/drafts.json', { drafts: [] }).drafts ?? []; }
 
   // The vault's GitHub Action fires the routine when this file changes.

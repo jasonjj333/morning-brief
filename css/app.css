@@ -505,6 +505,7 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 }
 .pill-positive { background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
 .pill-negative { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
+.pill-warning { background: var(--pill-warning-bg); color: var(--pill-warning-ink); }
 .pill-neutral { background: var(--pill-neutral-bg); color: var(--pill-neutral-ink); }
 .pill-accent { background: var(--pill-accent-bg); color: var(--pill-accent-ink); }
 
@@ -927,6 +928,51 @@ tr.is-removing td { text-decoration: line-through; color: var(--muted); }
 .panel-head .panel-action { margin-left: auto; padding: 4px; }
 .standup { font-size: 15px; line-height: 1.5; }
 .standup .rows { margin-top: 0; }
+
+/* ---------- filtered senders ---------- */
+
+.avatar[data-hue="20"] { --hue: 20; } .avatar[data-hue="80"] { --hue: 80; } .avatar[data-hue="140"] { --hue: 140; }
+.avatar[data-hue="200"] { --hue: 200; } .avatar[data-hue="260"] { --hue: 260; } .avatar[data-hue="320"] { --hue: 320; }
+.person[data-hue="20"] { --hue: 20; } .person[data-hue="80"] { --hue: 80; } .person[data-hue="140"] { --hue: 140; }
+.person[data-hue="200"] { --hue: 200; } .person[data-hue="260"] { --hue: 260; } .person[data-hue="320"] { --hue: 320; }
+.sender-avatar { --hue: 200; width: 36px; height: 36px; font-size: 15px; flex: none; color: hsl(var(--hue) 35% 24%); }
+@media (prefers-color-scheme: dark) { .sender-avatar { color: hsl(var(--hue) 40% 85%); } }
+.filtered-card {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 18px 18px 18px 20px; border: 0; border-radius: var(--radius-card);
+  background: var(--surface); color: var(--text); text-align: left; font: inherit;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.18s;
+}
+.filtered-card:active { transform: scale(0.985); background: var(--surface-2); }
+.filtered-card > .chev, .sender-row > .chev { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; }
+.filtered-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.filtered-title { font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; }
+.filtered-sum { font-size: 14px; color: var(--muted); line-height: 1.4; }
+.filtered-cta { font-size: 13px; font-weight: 600; color: var(--accent); }
+.sender-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sender-row, .finish-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 10px 12px; border: 0; border-radius: var(--radius-row);
+  background: var(--raised); color: var(--text); text-align: left; font: inherit;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.18s;
+}
+.sender-row:active { transform: scale(0.985); background: var(--surface-2); }
+.sender-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.sender-name { font-size: 15px; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sender-meta { font-size: 13px; color: var(--muted); margin: 0; overflow: hidden; text-overflow: ellipsis; }
+.finish-row .sender-meta { white-space: normal; }
+.sender-pills { display: flex; gap: 6px; margin-top: 2px; }
+.sender-pills .pill, .sender-status .pill { margin: 0; }
+.sender-count { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sender-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.sender-head .sender-name { white-space: normal; font-size: 17px; }
+.sheet-sub { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 8px; }
+.example-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.example { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--surface); color: var(--text); text-decoration: none; }
+.example-subject { font-size: 14px; line-height: 1.35; }
+.example-date { font-size: 12px; color: var(--muted); }
+.sender-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.finish-row .btn { flex: none; text-decoration: none; }
 
 /* ---------- drafts ---------- */
 

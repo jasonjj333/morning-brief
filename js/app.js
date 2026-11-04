@@ -1,6 +1,6 @@
 import { Store, target, PROFILES, activeProfile, rememberProfile } from './store.js';
 import { nextRunLabel, rowPills, setSchedule } from './render.js';
-import { personalTodayView, draftsView } from './personal.js';
+import { personalTodayView, draftsView, filteredView, findSender, senderSheetHTML } from './personal.js';
 import { Navigator } from './nav.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
@@ -45,7 +45,7 @@ function makeView(route) {
     render(el) { el.innerHTML = settingsPageHTML(store); bindSettings(el); },
   };
   const views = store.profile.id === 'personal'
-    ? { today: personalTodayView, events: eventsView, drafts: draftsView, feedback: feedbackView }
+    ? { today: personalTodayView, events: eventsView, drafts: draftsView, feedback: feedbackView, filtered: filteredView }
     : { today: todayView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView };
   const v = (views[route] ?? views.today)(store);
   if (route === 'today') v.navLeft = profileChip;
@@ -208,6 +208,9 @@ document.addEventListener('click', (e) => {
     navigator.clipboard?.writeText(text).then(() => toast('Stand-up notes copied'), () => toast('Could not copy. Select the text and copy it.'));
     return;
   }
+  if (e.target.closest('[data-open-filtered]')) { if (nav.current?.view.route !== 'filtered') nav.push('filtered'); return; }
+  const snd = e.target.closest('[data-sender]');
+  if (snd) { senderSheet(snd.dataset.sender); return; }
   const prof = e.target.closest('button[data-switch]');
   if (prof) { switchProfile(prof.dataset.switch); return; }
   const dc = e.target.closest('[data-draft-id]');
@@ -418,6 +421,43 @@ function bindDraft(sheet) {
       await store.saveDraft(box.dataset.draft, { body: body.value, ...(subject ? { subject: subject.value } : {}), ...(to ? { email: to.value } : {}) });
       toast('Draft saved');
     } catch (err) { save.disabled = false; failed(err); }
+  });
+}
+
+// A filtered sender: examples, then Unsubscribe / Block / Not junk. Each is feedback the morning routine applies.
+function senderSheet(id) {
+  const s = findSender(store, id);
+  if (!s) { toast('That sender is gone from the list. Pull to refresh.'); return; }
+  openSheet({
+    title: 'Sender',
+    body: `<div data-sender-body>${senderSheetHTML(store, s)}</div>`,
+    onMount({ root, sheet, close }) {
+      const body = sheet.querySelector('[data-sender-body]');
+      const redraw = () => {
+        if (!root.isConnected) { store.removeEventListener('change', redraw); return; }
+        const cur = findSender(store, id);
+        if (cur) body.innerHTML = senderSheetHTML(store, cur);
+      };
+      store.addEventListener('change', redraw);
+      sheet.addEventListener('click', async (e) => {
+        const undo = e.target.closest('[data-sender-undo]');
+        if (undo) {
+          try { await store.withdrawFeedback(undo.dataset.senderUndo); toast('Undone'); } catch (err) { failed(err); }
+          return;
+        }
+        const b = e.target.closest('[data-sender-act]');
+        if (!b) return;
+        const action = b.dataset.senderAct;
+        const sender = { name: s.name ?? '', address: s.address, account: s.account, kind: s.kind ?? null, unsubscribe: s.unsubscribe ?? null };
+        b.disabled = true;
+        try {
+          await store.addFeedback({ action, sender, note: '' });
+          const when = nextRunLabel();
+          toast({ block: `Blocking at ${when}`, unsubscribe: `Unsubscribing at ${when}`, unblock: `Unblocking at ${when}`, not_junk: `Their mail shows in your brief from ${when}` }[action]);
+          if (action === 'not_junk') close();
+        } catch (err) { b.disabled = false; failed(err); }
+      });
+    },
   });
 }
 

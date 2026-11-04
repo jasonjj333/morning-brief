@@ -116,7 +116,7 @@ function meetingHTML(store, ctx, m, isToday) {
     .replace('<div class="row-body">', `<div class="row-body"><span class="row-time${m.canceled ? ' is-canceled' : ''}">${esc(m.timeLabel)}</span>`);
 }
 
-const nameHue = (name) => { let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360; return Math.round(h / 60) * 60 + 20; };
+export const nameHue = (name) => { let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360; return Math.round(h / 60) * 60 + 20; };
 
 // ---------- shared bits ----------
 
@@ -550,11 +550,11 @@ export function noteView(store, path) {
 
 // ---------- Feedback ----------
 
-const ACTION_LABEL = { confirm: 'Confirmed', remove: 'Remove', feedback: 'Note', add: 'New', done: 'Marked done', reopen: 'Reopened' };
-const ACTION_TONE = { confirm: 'positive', remove: 'negative', feedback: 'neutral', add: 'accent', done: 'positive', reopen: 'neutral' };
+const ACTION_LABEL = { confirm: 'Confirmed', remove: 'Remove', feedback: 'Note', add: 'New', done: 'Marked done', reopen: 'Reopened', block: 'Block', unblock: 'Unblock', unsubscribe: 'Unsubscribe', not_junk: 'Not junk' };
+const ACTION_TONE = { confirm: 'positive', remove: 'negative', feedback: 'neutral', add: 'accent', done: 'positive', reopen: 'neutral', block: 'negative', unblock: 'neutral', unsubscribe: 'negative', not_junk: 'positive' };
 
 export function feedbackRow(f) {
-  const what = f.target ? splitItem(f.target.text).main : f.add?.text ?? '';
+  const what = f.target ? splitItem(f.target.text).main : f.add?.text ?? (f.sender ? `${f.sender.name || f.sender.address}${f.sender.name ? ` · ${f.sender.address}` : ''}` : '');
   const kind = f.add ? ({ todo: 'To-do', event: 'Event', note: 'Note to Claude' }[f.add.kind] ?? 'New') : null;
   return `<li class="fb-row" data-fid="${esc(f.id)}">
     <div class="fb-main">
