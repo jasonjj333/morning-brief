@@ -34,7 +34,7 @@ const PERSONAL_TABS = [
 const tabsFor = (id) => (id === 'personal' ? PERSONAL_TABS : WORK_TABS);
 
 // The profile chip at the top left of Today switches between Work and Personal.
-const profileChip = () => `<button class="profile-chip" type="button" data-action="profile" aria-label="Profile: ${store.profile.label}. Switch profile">
+const profileChip = () => `<button class="profile-chip" type="button" data-action="profile" aria-haspopup="menu" aria-expanded="false" aria-label="Profile: ${store.profile.label}. Switch profile">
   <span class="profile-dot profile-${store.profile.id}" aria-hidden="true"></span><span>${store.profile.label}</span>
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>`;
 
@@ -83,6 +83,7 @@ let switching = false;
 async function switchProfile(id) {
   if (switching || id === store.profile.id || !PROFILES[id]) return;
   switching = true;
+  closeMenu({ instant: true });
   closeAllSheets();
   const stage = $('#stage');
   const s = spring({ response: 0.32, damping: 1 });
@@ -106,16 +107,58 @@ async function switchProfile(id) {
   store.sync();
 }
 
-function profileSheet() {
-  openSheet({
-    title: 'Profile',
-    body: `<ul class="profile-list">${Object.values(PROFILES).map((p) => `<li><button class="profile-opt" type="button" data-switch="${p.id}" aria-pressed="${p.id === store.profile.id}">
-        <span class="profile-dot profile-${p.id}" aria-hidden="true"></span>
-        <span class="profile-text"><span class="profile-name">${p.label}</span><span class="profile-blurb">${p.blurb}</span></span>
-        <svg class="profile-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.6 3.6 7.4-8"/></svg>
-      </button></li>`).join('')}</ul>`,
-  });
+// The profile chip opens a dropdown menu under itself, like an iOS pull-down menu.
+let menu = null;
+function closeMenu({ instant = false } = {}) {
+  if (!menu) return;
+  const { layer, panel, anchor } = menu;
+  menu = null;
+  anchor.setAttribute('aria-expanded', 'false');
+  document.removeEventListener('keydown', onMenuKey, true);
+  if (instant) { layer.remove(); return; }
+  animate(panel, [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.92)' }], { duration: 140, easing: 'ease-in' }).then(() => layer.remove());
 }
+function onMenuKey(e) {
+  if (!menu) return;
+  const items = [...menu.panel.querySelectorAll('[role="menuitemradio"]')];
+  const i = items.indexOf(document.activeElement);
+  if (e.key === 'Escape') { e.preventDefault(); const a = menu.anchor; closeMenu(); a.focus(); }
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus(); }
+  else if (e.key === 'Tab') closeMenu();
+}
+function profileMenu(anchor) {
+  if (menu) { closeMenu(); return; }
+  const layer = document.createElement('div');
+  layer.className = 'menu-layer';
+  layer.innerHTML = `<div class="menu" role="menu" aria-label="Switch profile">${Object.values(PROFILES).map((p) => `
+    <button class="menu-item" type="button" role="menuitemradio" aria-checked="${p.id === store.profile.id}" data-switch="${p.id}">
+      <svg class="menu-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.6 3.6 7.4-8"/></svg>
+      <span class="menu-text"><span class="menu-label">${p.label}</span><span class="menu-sub">${p.blurb}</span></span>
+      <span class="profile-dot profile-${p.id}" aria-hidden="true"></span>
+    </button>`).join('')}</div>`;
+  document.body.append(layer);
+  const panel = layer.querySelector('.menu');
+  const r = anchor.getBoundingClientRect();
+  panel.style.top = `${Math.round(r.bottom + 6)}px`;
+  panel.style.left = `${Math.round(Math.max(8, Math.min(r.left, innerWidth - panel.offsetWidth - 8)))}px`;
+  menu = { layer, panel, anchor };
+  anchor.setAttribute('aria-expanded', 'true');
+  // Grows out of the chip on a spring.
+  animate(panel, [{ opacity: 0, transform: 'scale(0.5)' }, { opacity: 1, transform: 'scale(1)' }], spring({ response: 0.34, damping: 0.82 }));
+  layer.addEventListener('pointerdown', (e) => { if (!e.target.closest('.menu')) { e.preventDefault(); closeMenu(); } });
+  layer.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-switch]');
+    if (!b) return;
+    e.stopPropagation();
+    const id = b.dataset.switch;
+    for (const x of panel.querySelectorAll('[data-switch]')) x.setAttribute('aria-checked', String(x === b));
+    setTimeout(() => { closeMenu(); switchProfile(id); }, 120);
+  });
+  document.addEventListener('keydown', onMenuKey, true);
+  (panel.querySelector('[aria-checked="true"]') ?? panel.querySelector('button')).focus({ preventScroll: true });
+}
+addEventListener('resize', () => closeMenu({ instant: true }));
+document.addEventListener('scroll', () => closeMenu(), { capture: true, passive: true });
 
 function patchRows(root) {
   if (!root) return;
@@ -218,7 +261,7 @@ document.addEventListener('click', (e) => {
   const act = e.target.closest('[data-action]');
   if (act) {
     const a = act.dataset.action;
-    if (a === 'profile') return profileSheet();
+    if (a === 'profile') return profileMenu(act);
     if (a === 'settings') { closeAllSheets(); if (nav.current?.view.route !== 'settings') nav.push('settings'); return; }
     if (a === 'routines') return routinesSheet();
     if (a === 'add') return addSheet(act.dataset.kind);
