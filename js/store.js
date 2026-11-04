@@ -1,11 +1,24 @@
 // Reads the vault from the private GitHub repo (or the local dev server), caches it by blob sha,
 // and writes checkbox changes and feedback back as commits.
 
-const CFG_KEY = 'brief.config';
-const CACHE_KEY = 'brief.cache.v1';
-const OUTBOX_KEY = 'brief.outbox';
-
-const DEFAULTS = { owner: 'jasonjj333', repo: 'pariveda-notes', branch: 'main', token: '', name: 'Jason' };
+// Two profiles, each with its own repo, settings, cache and unsent changes. Work keeps the original keys.
+export const PROFILES = {
+  work: {
+    id: 'work', label: 'Work', blurb: 'Outlook, Slack and meetings',
+    keys: { cfg: 'brief.config', cache: 'brief.cache.v1', outbox: 'brief.outbox' },
+    defaults: { owner: 'jasonjj333', repo: 'pariveda-notes', branch: 'main', token: '', name: 'Jason' },
+    dev: '/__dev', schedule: 'hourly',
+  },
+  personal: {
+    id: 'personal', label: 'Personal', blurb: 'Gmail and Yahoo Mail',
+    keys: { cfg: 'brief.personal.config', cache: 'brief.personal.cache', outbox: 'brief.personal.outbox' },
+    defaults: { owner: 'jasonjj333', repo: 'personal-brief', branch: 'main', token: '', name: 'Jason' },
+    dev: '/__devp', schedule: 'daily',
+  },
+};
+const PROFILE_KEY = 'brief.profile';
+export const activeProfile = () => (PROFILES[read(PROFILE_KEY, 'work')] ? read(PROFILE_KEY, 'work') : 'work');
+export const rememberProfile = (id) => write(PROFILE_KEY, id);
 
 const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage full or blocked */ } };
@@ -69,8 +82,9 @@ class GitHubSource {
 
 // Local preview: dev/serve.mjs serves a copy of the vault at /__dev.
 class DevSource {
+  constructor(prefix = '/__dev') { this.prefix = prefix; }
   async j(path, opts) {
-    const res = await fetch('/__dev' + path, { cache: 'no-store', ...opts });
+    const res = await fetch(this.prefix + path, { cache: 'no-store', ...opts });
     if (!res.ok) { const e = new Error(`Dev server returned ${res.status}`); e.status = res.status; throw e; }
     return res.json();
   }
@@ -84,44 +98,55 @@ class DevSource {
 }
 
 const WANTED = /\.(md|json|base)$/i;
-const SKIP = /^(\.obsidian|\.trash|Templates)\//;
+const SKIP = /^(\.obsidian|\.trash|\.github|Templates|Mail)\//;
 
 export class Store extends EventTarget {
-  constructor() {
+  constructor(profileId = 'work') {
     super();
-    this.config = { ...DEFAULTS, ...read(CFG_KEY, {}) };
+    this.profile = PROFILES[profileId] ?? PROFILES.work;
+    const { keys, defaults } = this.profile;
+    this.keys = keys;
+    this.config = { ...defaults, ...read(keys.cfg, {}) };
+    // The personal repo can share the work token: add personal-brief to its repository access on GitHub.
+    this.borrowed = false;
+    if (!this.config.token && this.profile.id !== 'work') {
+      const t = read(PROFILES.work.keys.cfg, {}).token;
+      if (t) { this.config.token = t; this.borrowed = true; }
+    }
     this.dev = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && new URLSearchParams(location.search).has('dev');
-    const cached = read(CACHE_KEY, null);
+    const cached = read(keys.cache, null);
     this.tree = cached?.tree ?? [];
     this.blobs = cached?.blobs ?? {};
     this.commit = cached?.commit ?? null;
     this.syncedAt = cached?.syncedAt ?? 0;
     this.syncing = false;
     this.error = null;
-    this.outbox = read(OUTBOX_KEY, []);
+    this.outbox = read(keys.outbox, []);
   }
 
   get connected() { return this.dev || !!this.config.token; }
-  get source() { return this.dev ? new DevSource() : new GitHubSource(this.config); }
+  get source() { return this.dev ? new DevSource(this.profile.dev) : new GitHubSource(this.config); }
   get hasData() { return this.tree.length > 0; }
 
   setConfig(patch) {
     const repoChanged = ['owner', 'repo', 'branch'].some((k) => k in patch && patch[k] !== this.config[k]);
     this.config = { ...this.config, ...patch };
-    write(CFG_KEY, this.config);
+    if ('token' in patch) this.borrowed = false;
+    write(this.keys.cfg, this.borrowed ? { ...this.config, token: '' } : this.config);
     if (repoChanged) { this.tree = []; this.blobs = {}; this.commit = null; this.persist(); }
     this.emit();
   }
 
   signOut() {
     this.config = { ...this.config, token: '' };
-    write(CFG_KEY, this.config);
+    this.borrowed = false;
+    write(this.keys.cfg, this.config);
     this.tree = []; this.blobs = {}; this.commit = null;
-    try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(this.keys.cache); } catch { /* ignore */ }
     this.emit();
   }
 
-  persist() { write(CACHE_KEY, { tree: this.tree, blobs: this.blobs, commit: this.commit, syncedAt: this.syncedAt }); }
+  persist() { write(this.keys.cache, { tree: this.tree, blobs: this.blobs, commit: this.commit, syncedAt: this.syncedAt }); }
   // kind: 'status' (syncing, errors), 'local' (this device saved something), 'data' (the vault changed elsewhere).
   emit(kind = 'data') { this.dispatchEvent(new CustomEvent('change', { detail: { kind } })); }
 
@@ -156,6 +181,9 @@ export class Store extends EventTarget {
       this.persist();
       await this.flushOutbox();
     } catch (e) {
+      if (this.borrowed && (e.status === 404 || e.status === 403)) {
+        e.message = `Your token can't see ${this.config.repo} yet. On GitHub, edit the token and add ${this.config.repo} to its repository access, or paste a token for it in Settings.`;
+      }
       this.error = e;
     } finally {
       this.syncing = false;
@@ -197,7 +225,7 @@ export class Store extends EventTarget {
   async addFeedback(entry) {
     const item = { id: crypto.randomUUID(), at: new Date().toISOString(), ...entry };
     this.outbox.push(item);
-    write(OUTBOX_KEY, this.outbox);
+    write(this.keys.outbox, this.outbox);
     this.emit('local');
     await this.flushOutbox();
     return item;
@@ -206,7 +234,7 @@ export class Store extends EventTarget {
   async withdrawFeedback(id) {
     const before = this.outbox.length;
     this.outbox = this.outbox.filter((x) => x.id !== id);
-    write(OUTBOX_KEY, this.outbox);
+    write(this.keys.outbox, this.outbox);
     if (this.outbox.length !== before) { this.emit('local'); return; }
     await this.mutate('Feedback/inbox.json', (text) => {
       const doc = safeJson(text);
@@ -227,7 +255,7 @@ export class Store extends EventTarget {
       }, batch.length === 1 ? `brief: feedback (${batch[0].action}) — ${(batch[0].target?.text || batch[0].add?.text || batch[0].note || '').slice(0, 60)}` : `brief: ${batch.length} feedback items`);
       const sent = new Set(batch.map((x) => x.id));
       this.outbox = this.outbox.filter((x) => !sent.has(x.id));
-      write(OUTBOX_KEY, this.outbox);
+      write(this.keys.outbox, this.outbox);
       this.emit('local');
     } catch (e) {
       this.error = e;
@@ -276,6 +304,17 @@ export class Store extends EventTarget {
     }, 'app: edit draft');
   }
 
+  async setDraftStatus(id, status) {
+    await this.mutate('Feedback/drafts.json', (text) => {
+      const doc = safeJsonDoc(text, 'drafts');
+      const d = doc.drafts.find((x) => x.id === id);
+      if (!d || d.status === status) return null;
+      if (status) d.status = status; else delete d.status;
+      d.updated = new Date().toISOString();
+      return JSON.stringify(doc, null, 2) + '\n';
+    }, `app: draft ${status || 'reopened'}`);
+  }
+
   // Toggle "- [ ]" on one line, found by its text so a shifted line number still works.
   async toggleTask(item, done) {
     let line = item.line, raw = item.raw;
@@ -291,7 +330,7 @@ export class Store extends EventTarget {
     Object.assign(item, { line, raw, checked: done });
     // Tell the routine, so it can mirror the change into the other notes that list this item.
     this.outbox.push({ id: crypto.randomUUID(), at: new Date().toISOString(), action: done ? 'done' : 'reopen', target: target(item), note: '' });
-    write(OUTBOX_KEY, this.outbox);
+    write(this.keys.outbox, this.outbox);
     await this.flushOutbox().catch(() => {});
   }
 }

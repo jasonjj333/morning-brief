@@ -1,12 +1,18 @@
 // Local preview: serves the site and a throwaway copy of a vault at /__dev.
-// node dev/serve.mjs <path-to-vault-copy> [port]
+// node dev/serve.mjs <path-to-vault-copy> [port] [path-to-personal-vault-copy]
+// The work vault is served at /__dev, the personal one at /__devp.
 import { createServer } from 'node:http';
 import { readFile, writeFile, readdir, stat, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { join, extname, dirname, resolve, relative } from 'node:path';
 
 const site = resolve(dirname(new URL(import.meta.url).pathname), '..');
-const vault = resolve(process.argv[2] ?? '');
+// Without a third path, a personal-copy folder next to the work copy is used when there is one.
+const work = resolve(process.argv[2] ?? '');
+const sibling = join(dirname(work), 'personal-copy');
+const vaults = { '/__dev': work, '/__devp': resolve(process.argv[4] ?? (existsSync(sibling) ? sibling : work)) };
+let vault = vaults['/__dev'];
 const port = +(process.argv[3] ?? 4173);
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
 const sha = (t) => createHash('sha1').update(t).digest('hex');
@@ -25,6 +31,8 @@ const json = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'appli
 
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  const m = /^(\/__devp?)(\/.*)$/.exec(url.pathname);
+  if (m) { vault = vaults[m[1]]; url.pathname = '/__dev' + m[2]; }
   try {
     if (url.pathname === '/__dev/tree') {
       const files = await walk(vault);

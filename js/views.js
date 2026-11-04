@@ -9,12 +9,12 @@ const EVENTS = 'Home Dashboard/Upcoming Events.md';
 
 const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const parseYmd = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s ?? ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
-const longDate = (d) => `${DOW[d.getDay()]}, ${MON[d.getMonth()]} ${d.getDate()}`;
-const shortDate = (d) => `${DOW[d.getDay()].slice(0, 3)}, ${MON[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
-const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
-const sameDay = (a, b) => a && b && a.getTime() === b.getTime();
+export const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const parseYmd = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s ?? ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+export const longDate = (d) => `${DOW[d.getDay()]}, ${MON[d.getMonth()]} ${d.getDate()}`;
+export const shortDate = (d) => `${DOW[d.getDay()].slice(0, 3)}, ${MON[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
+export const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+export const sameDay = (a, b) => a && b && a.getTime() === b.getTime();
 
 export function ago(iso) {
   const t = new Date(iso).getTime();
@@ -30,7 +30,7 @@ export function ago(iso) {
 const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 // "Wed 11/4 · 1:30" → { date, time }
-function cellDate(cell, ref = today()) {
+export function cellDate(cell, ref = today()) {
   const m = /(\d{1,2})\/(\d{1,2})/.exec(cell);
   if (!m) return { date: null, time: null };
   let y = ref.getFullYear();
@@ -41,7 +41,7 @@ function cellDate(cell, ref = today()) {
 }
 
 // Meeting clocks in the brief are written "9:30" or "3:00" (business hours); read 1–6 as afternoon.
-function minutesOf(time) {
+export function minutesOf(time) {
   const m = /^(\d{1,2})(?::(\d{2}))?/.exec(time ?? '');
   if (!m) return null;
   let h = +m[1];
@@ -129,16 +129,16 @@ const ICON = {
 };
 export { ICON };
 
-const addButton = (kind = 'todo') => `<button class="icon-btn" type="button" data-action="add" data-kind="${kind}" aria-label="Add">${ICON.plus}</button>`;
+export const addButton = (kind = 'todo') => `<button class="icon-btn" type="button" data-action="add" data-kind="${kind}" aria-label="Add">${ICON.plus}</button>`;
 
-function panel({ title, count, body, span = 12, cls = '', action = '' }) {
+export function panel({ title, count, body, span = 12, cls = '', action = '' }) {
   return `<section class="panel span-${span} ${cls}">
     <header class="panel-head"><h2>${title}</h2>${count != null ? `<span class="count">${count}</span>` : ''}${action}</header>
     ${body}
   </section>`;
 }
 
-function syncBanner(store) {
+export function syncBanner(store) {
   if (store.error) {
     return `<div class="banner banner-error" role="alert"><span>${esc(store.error.message)}</span><button type="button" class="text-btn" data-action="sync">Try again</button></div>`;
   }
@@ -146,20 +146,20 @@ function syncBanner(store) {
   return '';
 }
 
-function connectPanel() {
+export function connectPanel(store) {
   return `<section class="panel span-12 connect">
     <header class="panel-head"><h2>Connect your vault</h2></header>
     <p>Morning Brief reads your notes straight from your private GitHub repo and writes your feedback back to it. Nothing is stored on this site.</p>
     <ol class="steps">
       <li>Open <a class="ext" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub → Fine-grained tokens</a>.</li>
-      <li>Repository access: only <strong>pariveda-notes</strong>. Permissions: <strong>Contents — Read and write</strong>.</li>
+      <li>Repository access: <strong>${esc(store.config.repo)}</strong>${store.profile.id === 'personal' ? ' (or edit your work token and add it there)' : ''}. Permissions: <strong>Contents — Read and write</strong>.</li>
       <li>Paste the token here. It stays in this browser only.</li>
     </ol>
     <button class="btn btn-primary" type="button" data-action="settings">Connect</button>
   </section>`;
 }
 
-function loading() { return '<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading your notes</div>'; }
+export function loading() { return '<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading your notes</div>'; }
 
 // ---------- Today ----------
 
@@ -167,7 +167,7 @@ export function latestDaily(store) {
   return store.files(DAILY).filter((p) => /\d{4}-\d{2}-\d{2}\.md$/.test(p)).sort().pop() ?? null;
 }
 
-function upcoming(store) {
+export function upcoming(store) {
   const { blocks } = parseNote(store, EVENTS);
   const sec = sections(blocks);
   const next = sec.find(/next/i);
@@ -184,7 +184,7 @@ export function todayView(store) {
     route: 'today', title: 'Today',
     navRight: () => `<button class="icon-btn" type="button" data-action="routines" aria-label="Run routines">${ICON.run}</button><button class="icon-btn" type="button" data-action="settings" aria-label="Settings">${ICON.gear}</button>${addButton('todo')}`,
     render(el) {
-      if (!store.connected) { el.innerHTML = `${heroHTML(store, null)}<div class="grid">${connectPanel()}</div>`; return; }
+      if (!store.connected) { el.innerHTML = `${heroHTML(store, null)}<div class="grid">${connectPanel(store)}</div>`; return; }
       const path = latestDaily(store);
       if (!path) { el.innerHTML = `${heroHTML(store, null)}${syncBanner(store)}${store.syncing && !store.hasData ? loading() : '<div class="grid">' + panel({ title: 'No brief yet', body: '<p class="muted">The first brief arrives at 7:00 on the next weekday.</p>' }) + '</div>'}`; return; }
 
@@ -285,7 +285,7 @@ export function todayView(store) {
   };
 }
 
-function heroHTML(store, data, finding = '') {
+export function heroHTML(store, data, finding = '') {
   const h = new Date().getHours();
   const part = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
   const d = parseYmd(data?.date) ?? today();
@@ -299,14 +299,15 @@ function heroHTML(store, data, finding = '') {
 }
 
 // The week at a glance: Monday to Friday, with every dated item from Upcoming Events.
-function weekStrip(store) {
+export function weekStrip(store) {
   const t = today();
   const mon = new Date(t);
   const dow = t.getDay();
-  mon.setDate(t.getDate() + (dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow));
+  const seven = store.profile?.id === 'personal';
+  if (!seven) mon.setDate(t.getDate() + (dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow));
   const rows = upcoming(store);
-  const days = Array.from({ length: 5 }, (_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); return d; });
-  return `<div class="week" role="list" aria-label="This week">${days.map((d) => {
+  const days = Array.from({ length: seven ? 7 : 5 }, (_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); return d; });
+  return `<div class="week${seven ? ' week-7' : ''}" role="list" aria-label="${seven ? 'The next seven days' : 'This week'}">${days.map((d) => {
     const items = rows.filter((r) => sameDay(r.date, d));
     const isT = sameDay(d, t);
     const past = d < t;
@@ -336,7 +337,7 @@ export function actionsView(store) {
     route: 'actions', title: 'Action items', shortTitle: 'Actions',
     navRight: () => addButton('todo'),
     render(el) {
-      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Action items</h1><div class="grid">${connectPanel()}</div>`; return; }
+      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Action items</h1><div class="grid">${connectPanel(store)}</div>`; return; }
       const ctx = new Ctx(store, ACTIONS);
       const { blocks } = parseNote(store, ACTIONS);
       const sec = sections(blocks);
@@ -363,7 +364,7 @@ export function eventsView(store) {
     route: 'events', title: 'Upcoming', shortTitle: 'Upcoming',
     navRight: () => addButton('event'),
     render(el) {
-      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Upcoming</h1><div class="grid">${connectPanel()}</div>`; return; }
+      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Upcoming</h1><div class="grid">${connectPanel(store)}</div>`; return; }
       const ctx = new Ctx(store, EVENTS);
       const { blocks } = parseNote(store, EVENTS);
       const sec = sections(blocks);
@@ -395,7 +396,7 @@ export function eventsView(store) {
         <p class="subtitle">The next two weeks, soonest first</p>
         ${syncBanner(store)}
         <div class="grid">
-          ${list || panel({ title: 'Nothing scheduled', body: '<p class="muted">The morning brief adds dates from your calendar, email and Slack.</p>' })}
+          ${list || panel({ title: 'Nothing scheduled', body: `<p class="muted">${store.profile?.id === 'personal' ? 'The morning brief adds appointments and bookings it finds in your email.' : 'The morning brief adds dates from your calendar, email and Slack.'}</p>` })}
           ${tbdBody ? panel({ title: 'Date to be set', body: tbdBody }) : ''}
           ${tail.length ? `<div class="span-12">${renderBlocks(tail, ctx)}</div>` : ''}
         </div>`;
@@ -411,7 +412,7 @@ export function notesView(store) {
   return {
     route: 'notes', title: 'Notes',
     render(el) {
-      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Notes</h1><div class="grid">${connectPanel()}</div>`; return; }
+      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Notes</h1><div class="grid">${connectPanel(store)}</div>`; return; }
       el.innerHTML = `
         <h1 class="large-title page-title">Notes</h1>
         <label class="search">${ICON.search}<input type="search" placeholder="Search notes" value="${esc(state.q)}" aria-label="Search notes" enterkeyhint="search"></label>
@@ -509,7 +510,7 @@ export function noteView(store, path) {
 const ACTION_LABEL = { confirm: 'Confirmed', remove: 'Remove', feedback: 'Note', add: 'New', done: 'Marked done', reopen: 'Reopened' };
 const ACTION_TONE = { confirm: 'positive', remove: 'negative', feedback: 'neutral', add: 'accent', done: 'positive', reopen: 'neutral' };
 
-function feedbackRow(f) {
+export function feedbackRow(f) {
   const what = f.target ? splitItem(f.target.text).main : f.add?.text ?? '';
   const kind = f.add ? ({ todo: 'To-do', event: 'Event', note: 'Note to Claude' }[f.add.kind] ?? 'New') : null;
   return `<li class="fb-row" data-fid="${esc(f.id)}">
@@ -531,15 +532,15 @@ export function feedbackView(store) {
     route: 'feedback', title: 'Feedback',
     navRight: () => addButton('note'),
     render(el) {
-      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Feedback</h1><div class="grid">${connectPanel()}</div>`; return; }
+      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Feedback</h1><div class="grid">${connectPanel(store)}</div>`; return; }
       const pending = [...store.pending].reverse();
       const done = [...store.processed].reverse().slice(0, 40);
       el.innerHTML = `
         <h1 class="large-title page-title">Feedback</h1>
-        <p class="subtitle">Claude applies these at half past every hour on weekdays. Next run ${esc(nextRunLabel())}.</p>
+        <p class="subtitle">${store.profile?.id === 'personal' ? 'Claude applies these every morning at 7:00' : 'Claude applies these at half past every hour on weekdays'}. Next run ${esc(nextRunLabel())}.</p>
         ${syncBanner(store)}
         <div class="grid">
-          ${panel({ title: 'Waiting for the next run', count: pending.length || null, body: pending.length ? `<ul class="rows fb-list">${pending.map(withdrawable).join('')}</ul>` : '<p class="muted">Nothing waiting. Tap any item in your brief to confirm it, remove it, or add a note.</p>' })}
+          ${panel({ title: 'Waiting for the next run', count: pending.length || null, body: pending.length ? `<ul class="rows fb-list">${pending.map(withdrawable).join('')}</ul>` : '<p class="muted">Nothing waiting. Tap any item in your brief to remove it or add a note.</p>' })}
           ${panel({ title: 'Applied', body: done.length ? `<ul class="rows fb-list">${done.map((f) => feedbackRow(f).replace('</li>', `${f.resolution ? `<p class="fb-resolution">${esc(f.resolution)}</p>` : ''}<p class="fb-meta">Applied ${esc(ago(f.processed ?? f.at))}</p></li>`)).join('')}</ul>` : '<p class="muted">Nothing applied yet.</p>', cls: 'panel-quiet' })}
         </div>`;
     },
@@ -559,7 +560,7 @@ export function itemSheetHTML(store, item, { showOpen = true } = {}) {
       ${!isRow && meta ? `<p class="item-meta">${inline(meta, ctx)}</p>` : ''}
       <p class="item-where">${esc(friendlyName(item.file))}${item.section ? ` · ${esc(item.section)}` : ''}</p>
     </div>
-    ${item.kind === 'task' && !item.checked && draftFor(store, main) ? draftHTML(draftFor(store, main)) : ''}
+    ${item.kind === 'task' && !item.checked && draftFor(store, main) ? draftHTML(draftFor(store, main), { handled: store.profile?.id === 'personal' }) : ''}
     ${item.kind === 'task' ? `<button class="btn btn-primary btn-wide" type="button" data-sheet="toggle">${item.checked ? 'Mark not done' : 'Mark done'}</button>` : ''}
     <button class="btn btn-danger btn-wide" type="button" data-sheet="remove">Remove</button>
     <label class="field">
@@ -670,19 +671,25 @@ function slackLink(d) {
   return c ? `slack://channel?team=${encodeURIComponent(t)}&id=${encodeURIComponent(c)}` : '';
 }
 
-export function draftHTML(d) {
-  const email = d.channel === 'email';
+const DRAFT_APP = { email: 'Outlook', gmail: 'Gmail', yahoo: 'Yahoo Mail', slack: 'Slack' };
+
+export function draftHTML(d, { handled = false } = {}) {
+  const ch = DRAFT_APP[d.channel] ? d.channel : 'email';
+  const email = ch !== 'slack';
+  const from = ch === 'gmail' ? 'Gmail' : ch === 'yahoo' ? 'Yahoo' : '';
   return `<section class="draft" data-draft="${esc(d.id)}">
-    <h3>Draft ${email ? 'email' : 'Slack message'}${d.to ? ` to ${esc(d.to)}` : ''}${d.edited ? ' <span class="pill pill-neutral">Edited</span>' : ''}</h3>
+    <h3>Draft ${email ? 'email' : 'Slack message'}${d.to ? ` to ${esc(d.to)}` : ''}${from ? ` <span class="pill pill-neutral">${from}</span>` : ''}${d.edited ? ' <span class="pill pill-neutral">Edited</span>' : ''}</h3>
     ${email ? `<label class="field"><span class="field-label">To</span><input data-draft-to value="${esc(d.email ?? '')}" autocomplete="off"></label>
     <label class="field"><span class="field-label">Subject</span><input data-draft-subject value="${esc(d.subject ?? '')}"></label>` : ''}
-    <label class="field"><span class="field-label">Message</span><textarea rows="6" data-draft-body>${esc(d.body ?? '')}</textarea></label>
+    <label class="field"><span class="field-label">Message</span><textarea rows="7" data-draft-body>${esc(d.body ?? '')}</textarea></label>
     <div class="btn-pair">
-      <button class="btn btn-primary" type="button" data-draft-open="${email ? 'email' : 'slack'}" data-slack="${esc(email ? '' : slackLink(d))}">${email ? 'Open in Outlook' : 'Open in Slack'}</button>
+      <button class="btn btn-primary" type="button" data-draft-open="${ch}" data-slack="${esc(email ? '' : slackLink(d))}">Open in ${DRAFT_APP[ch]}</button>
       <button class="btn" type="button" data-draft-copy>Copy</button>
     </div>
     <button class="btn btn-wide" type="button" data-draft-save disabled>Save my edits</button>
-    <p class="muted small">Nothing is sent for you. ${email ? 'Outlook opens a new email with this filled in.' : 'The message is copied; paste it into the conversation.'}</p>
+    ${d.link && /^https:/.test(d.link) && ch !== 'slack' ? `<a class="mtg-more ext" href="${esc(d.link)}" target="_blank" rel="noopener noreferrer">Read their email${ICON.chev}</a>` : ''}
+    ${handled ? `<div class="btn-pair"><button class="btn" type="button" data-draft-status="sent">I sent it</button><button class="btn" type="button" data-draft-status="dismissed">No reply needed</button></div>` : ''}
+    <p class="muted small">Nothing is sent for you. ${email ? `${DRAFT_APP[ch]} opens a new email with this filled in.` : 'The message is copied; paste it into the conversation.'}</p>
   </section>`;
 }
 

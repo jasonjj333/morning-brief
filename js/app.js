@@ -1,5 +1,6 @@
-import { Store, target } from './store.js';
-import { nextRunLabel, rowPills } from './render.js';
+import { Store, target, PROFILES, activeProfile, rememberProfile } from './store.js';
+import { nextRunLabel, rowPills, setSchedule } from './render.js';
+import { personalTodayView, draftsView } from './personal.js';
 import { Navigator } from './nav.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
@@ -7,19 +8,35 @@ import { animate, spring } from './motion.js';
 import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
   itemSheetHTML, addSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
-  routinesHTML, settingsPageHTML, RECORD_LEAD,
+  routinesHTML, settingsPageHTML, RECORD_LEAD, draftHTML,
 } from './views.js';
 
-const store = new Store();
+let store = new Store(activeProfile());
+setSchedule(store.profile.schedule);
 const $ = (s, r = document) => r.querySelector(s);
 
-const TABS = [
+const ICONS = {
+  drafts: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><path d="M4.5 7l7.5 5.5L19.5 7"/></svg>',
+};
+const WORK_TABS = [
   { id: 'today', label: 'Today', route: 'today', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16M7 18a5 5 0 0 1 10 0M12 5v2.5M5.4 9.4l1.7 1.4M18.6 9.4l-1.7 1.4"/></svg>' },
   { id: 'actions', label: 'Actions', route: 'actions', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.4l2.4 2.4 4.7-5.2"/></svg>' },
   { id: 'events', label: 'Upcoming', route: 'events', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="3"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>' },
   { id: 'notes', label: 'Notes', route: 'notes', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6"/></svg>' },
   { id: 'feedback', label: 'Feedback', route: 'feedback', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14A1.5 1.5 0 0 1 20.5 7v9a1.5 1.5 0 0 1-1.5 1.5h-9l-4.5 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 16V7A1.5 1.5 0 0 1 5 5.5z"/></svg>' },
 ];
+const PERSONAL_TABS = [
+  WORK_TABS[0],
+  WORK_TABS[2],
+  { id: 'drafts', label: 'Drafts', route: 'drafts', icon: ICONS.drafts },
+  WORK_TABS[4],
+];
+const tabsFor = (id) => (id === 'personal' ? PERSONAL_TABS : WORK_TABS);
+
+// The profile chip at the top left of Today switches between Work and Personal.
+const profileChip = () => `<button class="profile-chip" type="button" data-action="profile" aria-label="Profile: ${store.profile.label}. Switch profile">
+  <span class="profile-dot profile-${store.profile.id}" aria-hidden="true"></span><span>${store.profile.label}</span>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>`;
 
 function makeView(route) {
   if (route.startsWith('note:')) return noteView(store, route.slice(5));
@@ -27,10 +44,15 @@ function makeView(route) {
     route: 'settings', title: 'Settings',
     render(el) { el.innerHTML = settingsPageHTML(store); bindSettings(el); },
   };
-  return { today: todayView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView }[route](store);
+  const views = store.profile.id === 'personal'
+    ? { today: personalTodayView, events: eventsView, drafts: draftsView, feedback: feedbackView }
+    : { today: todayView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView };
+  const v = (views[route] ?? views.today)(store);
+  if (route === 'today') v.navLeft = profileChip;
+  return v;
 }
 
-const nav = new Navigator($('#stage'), $('.tabbar'), TABS, makeView);
+const nav = new Navigator($('#stage'), $('.tabbar'), tabsFor(store.profile.id), makeView);
 
 // ---------- re-render on data changes ----------
 
@@ -38,7 +60,7 @@ const nav = new Navigator($('#stage'), $('.tabbar'), TABS, makeView);
 // pages you can't see and patches the rows in front of you, so the page never jumps. 'status' touches the chrome.
 const RANK = { status: 0, local: 1, data: 2 };
 let raf = 0, pendingKind = 'status';
-store.addEventListener('change', (e) => {
+function onStoreChange(e) {
   const kind = e.detail?.kind ?? 'data';
   if (RANK[kind] > RANK[pendingKind]) pendingKind = kind;
   cancelAnimationFrame(raf);
@@ -46,10 +68,53 @@ store.addEventListener('change', (e) => {
     const k = pendingKind;
     pendingKind = 'status';
     if (k === 'data') { registry.clear(); nav.refreshAll(); }
-    else if (k === 'local') { nav.refreshAll({ except: nav.current }); patchRows(nav.current?.el); }
+    else if (k === 'local') { const cur = nav.current; nav.refreshAll({ except: cur?.view.liveRefresh ? null : cur }); patchRows(cur?.el); }
     chrome();
   });
-});
+}
+store.addEventListener('change', onStoreChange);
+
+// ---------- profiles ----------
+
+// Work and Personal each have their own repo, pages and cache. Switching swaps the store and rebuilds the tabs
+// in place: the old pages sink back and fade, the new ones rise in.
+let switching = false;
+async function switchProfile(id) {
+  if (switching || id === store.profile.id || !PROFILES[id]) return;
+  switching = true;
+  closeAllSheets();
+  const stage = $('#stage');
+  const s = spring({ response: 0.32, damping: 1 });
+  await animate(stage, [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.97)' }], s);
+  store.removeEventListener('change', onStoreChange);
+  clearInterval(pollTimer);
+  store = new Store(id);
+  setSchedule(store.profile.schedule);
+  store.addEventListener('change', onStoreChange);
+  rememberProfile(id);
+  registry.clear();
+  const tabs = tabsFor(id);
+  nav.reset(tabs, makeView);
+  for (const t of tabs) nav.stack(t.id);
+  nav.select(tabs[0].id);
+  history.replaceState({ tab: tabs[0].id, routes: nav.routes, profile: id }, '');
+  chrome();
+  await animate(stage, [{ opacity: 0, transform: 'scale(1.03)' }, { opacity: 1, transform: 'scale(1)' }], spring({ response: 0.42, damping: 0.9 }));
+  stage.style.transform = '';
+  switching = false;
+  store.sync();
+}
+
+function profileSheet() {
+  openSheet({
+    title: 'Profile',
+    body: `<ul class="profile-list">${Object.values(PROFILES).map((p) => `<li><button class="profile-opt" type="button" data-switch="${p.id}" aria-pressed="${p.id === store.profile.id}">
+        <span class="profile-dot profile-${p.id}" aria-hidden="true"></span>
+        <span class="profile-text"><span class="profile-name">${p.label}</span><span class="profile-blurb">${p.blurb}</span></span>
+        <svg class="profile-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.6 3.6 7.4-8"/></svg>
+      </button></li>`).join('')}</ul>`,
+  });
+}
 
 function patchRows(root) {
   if (!root) return;
@@ -65,7 +130,9 @@ function patchRows(root) {
 }
 
 function chrome() {
-  $('[data-bind="scope"]').textContent = store.dev ? 'Local preview' : `${store.config.owner}/${store.config.repo}`;
+  $('[data-bind="scope"]').textContent = `${store.profile.label}${store.dev ? ' · local preview' : ` · ${store.config.repo}`}`;
+  document.documentElement.dataset.profile = store.profile.id;
+  for (const b of document.querySelectorAll('.side-profiles [data-switch]')) b.setAttribute('aria-selected', String(b.dataset.switch === store.profile.id));
   $('[data-bind="fresh"]').textContent = store.syncing ? 'Syncing…' : store.commit?.date ? `Updated ${ago(store.commit.date)}` : '';
   nav.setCount('feedback', store.pending.length);
   document.body.classList.toggle('is-syncing', store.syncing);
@@ -107,6 +174,7 @@ function openInApp(kind, web) {
 // ---------- taps ----------
 
 document.addEventListener('click', (e) => {
+  if (switching) { e.preventDefault(); return; }
   const rec = e.target.closest('a.mtg-record');
   if (rec) {
     // Let the link open Glean in a new tab; copy the name in case Glean doesn't fill the title.
@@ -131,9 +199,14 @@ document.addEventListener('click', (e) => {
     nav.push('note:' + path);
     return;
   }
+  const prof = e.target.closest('button[data-switch]');
+  if (prof) { switchProfile(prof.dataset.switch); return; }
+  const dc = e.target.closest('[data-draft-id]');
+  if (dc) { draftSheet(dc.dataset.draftId); return; }
   const act = e.target.closest('[data-action]');
   if (act) {
     const a = act.dataset.action;
+    if (a === 'profile') return profileSheet();
     if (a === 'settings') { closeAllSheets(); if (nav.current?.view.route !== 'settings') nav.push('settings'); return; }
     if (a === 'routines') return routinesSheet();
     if (a === 'add') return addSheet(act.dataset.kind);
@@ -251,7 +324,24 @@ function bindDraft(sheet) {
   box.querySelector('[data-draft-copy]').addEventListener('click', async () => toast(await copy() ? 'Copied' : 'Could not copy. Select the text and copy it.'));
   box.querySelector('[data-draft-open]').addEventListener('click', async (e) => {
     const b = e.currentTarget;
-    if (b.dataset.draftOpen === 'slack') {
+    const ch = b.dataset.draftOpen;
+    if (ch === 'gmail' || ch === 'yahoo') {
+      const q = (k, v) => (v ? `${k}=${encodeURIComponent(v)}` : '');
+      const to = box.querySelector('[data-draft-to]')?.value, sub = box.querySelector('[data-draft-subject]')?.value, text = body.value;
+      const app = ch === 'gmail'
+        ? `googlegmail://co?${[q('to', to), q('subject', sub), q('body', text)].filter(Boolean).join('&')}`
+        : `ymail://mail/compose?${[q('to', to), q('subject', sub), q('body', text)].filter(Boolean).join('&')}`;
+      const web = ch === 'gmail'
+        ? `https://mail.google.com/mail/u/0/?${['view=cm', 'fs=1', q('to', to), q('su', sub), q('body', text)].filter(Boolean).join('&')}`
+        : `https://compose.mail.yahoo.com/?${[q('to', to), q('subject', sub), q('body', text)].filter(Boolean).join('&')}`;
+      // Phones: the mail app. Desktop: the web compose window (where these accounts live on a Mac).
+      if (isMobile) {
+        location.href = app;
+        toast(`Opening ${ch === 'gmail' ? 'Gmail' : 'Yahoo Mail'}…`, { action: { label: 'Open in browser', run: () => window.open(web, '_blank', 'noopener') } });
+      } else window.open(web, '_blank', 'noopener');
+      return;
+    }
+    if (ch === 'slack') {
       const ok = await copy();
       if (b.dataset.slack) location.href = b.dataset.slack;
       toast(ok ? 'Copied. Paste it into the conversation.' : 'Opening Slack…');
@@ -262,6 +352,14 @@ function bindDraft(sheet) {
     location.href = `ms-outlook://compose?${params}`;
     toast('Opening Outlook…', { action: { label: 'Use my mail app', run: () => { location.href = `mailto:${encodeURIComponent(to?.value ?? '')}?${[q('subject', subject?.value), q('body', body.value)].filter(Boolean).join('&')}`; } } });
   });
+  for (const sb of box.querySelectorAll('[data-draft-status]')) sb.addEventListener('click', async () => {
+    const status = sb.dataset.draftStatus;
+    try {
+      await store.setDraftStatus(box.dataset.draft, status);
+      sheet.dispatchEvent(new CustomEvent('draft-handled'));
+      toast(status === 'sent' ? 'Marked sent' : status ? 'No reply needed' : 'Back in your drafts');
+    } catch (err) { failed(err); }
+  });
   save.addEventListener('click', async () => {
     save.disabled = true;
     try {
@@ -270,6 +368,23 @@ function bindDraft(sheet) {
     } catch (err) { save.disabled = false; failed(err); }
   });
 }
+
+function draftSheet(id) {
+  const d = store.drafts.find((x) => x.id === id);
+  if (!d) return;
+  openSheet({
+    title: d.status ? 'Handled reply' : 'Draft reply',
+    body: `${d.item ? `<div class="item-preview"><p class="item-main">${escText(d.item)}</p></div>` : ''}${draftHTML(d, { handled: !d.status })}${d.status ? '<button class="btn btn-wide" type="button" data-draft-status="">Move back to drafts</button>' : ''}`,
+    onMount({ sheet, close }) {
+      // "Move back" sits outside the draft box; give it the box's handler.
+      const back = sheet.querySelector(':scope [data-draft-status=""]');
+      if (back && !back.closest('[data-draft]')) sheet.querySelector('[data-draft]').append(back);
+      bindDraft(sheet);
+      sheet.addEventListener('draft-handled', () => close());
+    },
+  });
+}
+const escText = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function addSheet(kind = 'todo') {
   openSheet({
@@ -423,8 +538,8 @@ addEventListener('online', () => store.sync());
 
 // ---------- start ----------
 
-for (const t of TABS) nav.stack(t.id);
-nav.restore(history.state);
+for (const t of tabsFor(store.profile.id)) nav.stack(t.id);
+nav.restore(history.state?.profile && history.state.profile !== store.profile.id ? null : history.state);
 chrome();
 store.sync();
 document.documentElement.classList.add('ready');

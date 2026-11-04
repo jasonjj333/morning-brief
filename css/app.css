@@ -863,6 +863,68 @@ tr.is-removing td { text-decoration: line-through; color: var(--muted); }
 .toast.has-action.show { display: flex; }
 .toast-action { border: 0; background: var(--ground); color: var(--text); font-weight: 600; font-size: 13px; height: 30px; padding: 0 12px; border-radius: 999px; white-space: nowrap; }
 
+/* ---------- profiles ---------- */
+
+/* Personal swaps the teal for a warm clay, so it's obvious which inbox you're in. */
+:root[data-profile="personal"] {
+  --accent: #a24b2a; --accent-tint: #f5e6de;
+  --pill-accent-bg: #f5e6de; --pill-accent-ink: #6b2c14;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-profile="personal"] {
+    --accent: #e3936b; --accent-tint: #3a1d10;
+    --pill-accent-bg: #3a1d10; --pill-accent-ink: #f2c2a8;
+  }
+}
+.profile-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.profile-work { background: #1b6e66; }
+.profile-personal { background: #c2643c; }
+.profile-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 10px 0 12px;
+  border: 0; border-radius: 999px;
+  background: var(--surface); color: var(--text);
+  font: inherit; font-size: 14px; font-weight: 500;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.18s;
+}
+.profile-chip svg { width: 15px; height: 15px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.profile-chip:active { transform: scale(0.94); background: var(--surface-2); }
+.profile-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.profile-opt {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border: 0; border-radius: 16px;
+  background: var(--surface); color: var(--text); text-align: left; font: inherit;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.18s;
+}
+.profile-opt:active { transform: scale(0.98); background: var(--surface-2); }
+.profile-opt .profile-dot { width: 12px; height: 12px; }
+.profile-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.profile-name { font-size: 16px; font-weight: 600; }
+.profile-blurb { font-size: 13px; color: var(--muted); }
+.profile-check { width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity 0.18s; }
+.profile-opt[aria-pressed="true"] .profile-check { opacity: 1; }
+.side-profiles { display: none; }
+.inline-icon { width: 15px; height: 15px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.week.week-7 { grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.week.week-7 .day { min-height: 84px; }
+
+/* ---------- drafts ---------- */
+
+.draft-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.draft-card {
+  width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: center;
+  padding: 14px 14px 14px 16px; border: 0; border-radius: var(--radius-row);
+  background: var(--surface); color: var(--text); text-align: left; font: inherit;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.18s;
+}
+.draft-card:active { transform: scale(0.985); background: var(--surface-2); }
+.draft-card > .chev { grid-column: 2; grid-row: 1 / span 3; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; }
+.draft-card-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.draft-card-head .pill { margin: 0; }
+.draft-card-to { font-weight: 600; font-size: 15px; }
+.draft-card-subject { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-card-body { font-size: 13px; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
 /* ---------- tablet and up ---------- */
 
 @media (min-width: 600px) {
@@ -896,6 +958,17 @@ tr.is-removing td { text-decoration: line-through; color: var(--muted); }
   .brand-text { display: flex; flex-direction: column; min-width: 0; }
   .brand-name { font-weight: 600; font-size: 15px; }
   .brand-scope { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side-profiles {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px;
+    background: var(--surface-2); border-radius: 11px;
+  }
+  .side-profiles button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 30px; border: 0; border-radius: 8px; background: none;
+    color: var(--muted); font: inherit; font-size: 13px; font-weight: 500;
+    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+  }
+  .side-profiles button[aria-selected="true"] { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
   .tabs { flex-direction: column; height: auto; gap: 2px; }
   .tab {
     flex: none;

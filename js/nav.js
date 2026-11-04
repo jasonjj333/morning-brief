@@ -16,6 +16,12 @@ export class Navigator {
     this.active = null;
     this.busy = false;
     this.lastEdgeTouch = 0;
+    this.tabbar.querySelector('.tabs').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tab]');
+      if (!b) return;
+      if (b.dataset.tab === this.active) this.popToRoot();
+      else this.select(b.dataset.tab);
+    });
     this.buildTabbar();
     addEventListener('popstate', (e) => this.onPop(e.state));
     addEventListener('touchstart', (e) => { if (e.touches[0].clientX < 30) this.lastEdgeTouch = performance.now(); }, { passive: true });
@@ -27,12 +33,17 @@ export class Navigator {
       <button class="tab" type="button" role="tab" data-tab="${t.id}" aria-selected="false">
         <span class="tab-icon">${t.icon}</span><span class="tab-label">${t.label}</span><span class="tab-count" data-count="${t.id}"></span>
       </button>`).join('');
-    wrap.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-tab]');
-      if (!b) return;
-      if (b.dataset.tab === this.active) this.popToRoot();
-      else this.select(b.dataset.tab);
-    });
+  }
+
+  // Swap in another profile's tabs and pages.
+  reset(tabs, makeView) {
+    for (const s of this.stacks.values()) { for (const p of s.pages) p.view.onLeave?.(); s.el.remove(); }
+    this.stacks.clear();
+    this.active = null;
+    this.busy = false;
+    this.tabs = tabs;
+    this.makeView = makeView;
+    this.buildTabbar();
   }
 
   setCount(tabId, n) {
@@ -161,7 +172,8 @@ export class Navigator {
 
   // The browser (or our back button) moved history; follow it.
   onPop(state) {
-    if (!state) return;
+    // History from before a profile switch can name a tab this profile doesn't have.
+    if (!state || !this.tabs.some((t) => t.id === state.tab)) return;
     if (state.tab !== this.active) {
       this.select(state.tab, { record: false });
     }

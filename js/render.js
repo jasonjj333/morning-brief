@@ -41,10 +41,19 @@ export function friendlyName(path) {
   return t.replace(/^\d{4}-\d{2}-\d{2}\s*-\s*/, '');
 }
 
-// The hourly feedback routine fires at :30 past each hour, Monday to Friday (UTC).
+// When feedback is next applied. Work: the hourly routine at :30 past each hour, Monday to Friday (UTC).
+// Personal: the daily brief at 13:00 UTC (7:00 Central in winter, 8:00 in summer).
+let schedule = 'hourly';
+export const setSchedule = (s) => { schedule = s; };
+export const scheduleKind = () => schedule;
 export function nextRun(from = new Date()) {
   const d = new Date(from);
   d.setUTCSeconds(0, 0);
+  if (schedule === 'daily') {
+    if (d.getUTCHours() >= 13) d.setUTCDate(d.getUTCDate() + 1);
+    d.setUTCHours(13, 0);
+    return d;
+  }
   if (d.getUTCMinutes() >= 30) d.setUTCHours(d.getUTCHours() + 1);
   d.setUTCMinutes(30);
   while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1), d.setUTCHours(0, 30);
@@ -53,7 +62,9 @@ export function nextRun(from = new Date()) {
 export function nextRunLabel() {
   const d = nextRun();
   const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString([], { weekday: 'short' })} ${t}`;
+  if (d.toDateString() === new Date().toDateString()) return t;
+  const tom = new Date(); tom.setDate(tom.getDate() + 1);
+  return d.toDateString() === tom.toDateString() ? `tomorrow ${t}` : `${d.toLocaleDateString([], { weekday: 'short' })} ${t}`;
 }
 
 // Pending feedback on a line shows on the line itself.
@@ -70,7 +81,7 @@ const norm = (t) => plain(t).toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\
 export function draftFor(store, text) {
   const n = norm(splitItem(text).main);
   if (!n) return null;
-  return store.drafts.find((d) => { const m = norm(d.item ?? ''); return m && (m === n || n.includes(m) || m.includes(n)); }) ?? null;
+  return store.drafts.filter((d) => !d.status).find((d) => { const m = norm(d.item ?? ''); return m && (m === n || n.includes(m) || m.includes(n)); }) ?? null;
 }
 
 function pills(st) {
