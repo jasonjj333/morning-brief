@@ -165,7 +165,16 @@ export function loading() { return '<div class="loading" role="status"><span cla
 
 // Unsaved text survives redraws (a sync, a profile switch) until it's saved.
 export const journalDrafts = new Map();
-export const journalPath = (d = today()) => `Journal/${ymd(d)}.md`;
+// The day a note is about: until 5:00 AM (before the morning brief) a note still counts for the day before,
+// so one written at 1 AM lands in the stand-up notes the brief writes that morning.
+export const JOURNAL_ROLLOVER = 5;
+export function journalDay(now = new Date()) {
+  const d = new Date(now);
+  if (d.getHours() < JOURNAL_ROLLOVER) d.setDate(d.getDate() - 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+export const journalPath = (d = journalDay()) => `Journal/${ymd(d)}.md`;
 export function journalSaved(store, path) {
   const text = store.text(path);
   if (text == null) return { body: '', updated: null };
@@ -181,7 +190,9 @@ export function journalStatus(store, path) {
 }
 
 export function journalPanel(store, { span = 6 } = {}) {
-  const path = journalPath();
+  const day = journalDay();
+  const path = journalPath(day);
+  const late = !sameDay(day, today());
   const key = store.profile.id + ':' + path;
   const work = store.profile.id !== 'personal';
   const value = journalDrafts.get(key) ?? journalSaved(store, path).body;
@@ -199,7 +210,7 @@ export function journalPanel(store, { span = 6 } = {}) {
         <span class="journal-status" data-journal-status aria-live="polite">${esc(journalStatus(store, path))}</span>
         <button class="btn btn-small" type="button" data-journal-save${journalDrafts.has(key) ? '' : ' disabled'}>Save</button>
       </div>
-      <p class="muted small">${help}</p>
+      <p class="muted small">${late ? `It's after midnight, so this is saved as ${esc(DOW[day.getDay()])}'s note. ` : ''}${help}</p>
     </div>`,
   });
 }
