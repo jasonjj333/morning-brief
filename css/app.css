@@ -1219,3 +1219,35 @@ tr.is-removing td { text-decoration: line-through; color: var(--muted); }
 }
 .proj-title::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
 .proj-group:last-child .proj-title::before { background: var(--muted); opacity: 0.6; }
+
+/* ---------- routine schedules ---------- */
+.routine-sched { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.routine-sub { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.sched-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.sched-item { padding: 12px; border-radius: 14px; background: var(--surface); display: grid; gap: 10px; }
+.sched-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sched-days { display: flex; gap: 3px; flex-wrap: wrap; }
+.day-tog {
+  width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border); background: transparent;
+  color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background-color 0.18s, color 0.18s, border-color 0.18s, transform 0.12s;
+}
+.day-tog[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.day-tog:active { transform: scale(0.92); }
+.sched-remove { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; flex: none; }
+.sched-remove:hover { background: var(--surface-2); color: var(--negative); }
+.sched-remove svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.sched-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sched-in {
+  height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--raised); color: var(--text); font: inherit; font-size: 15px; min-width: 0;
+}
+.sched-in:focus { outline: none; border-color: var(--accent); }
+.sched-word { font-size: 14px; color: var(--muted); }
+.sched-model { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.sched-desc { margin: 0; font-size: 13px; color: var(--muted); }
+.sched-desc.is-error { color: var(--negative); }
+.sched-none { margin: 0 0 10px; }
+.sched-add { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.sched-runnow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); font-size: 14px; margin-bottom: 12px; }
+.sched-foot { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }

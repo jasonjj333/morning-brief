@@ -1,4 +1,5 @@
 import { esc, inline, plain, splitFrontmatter, stripLeadEmoji, splitItem } from './md.js';
+import { scheduleEditorHTML, nextRunLine } from './schedule-ui.js';
 import { Ctx, renderBlocks, rowHTML, parseNote, sections, noteTitle, friendlyName, registry, resolveNote, nextRunLabel, draftFor } from './render.js';
 
 const DAILY = 'Daily/';
@@ -664,7 +665,7 @@ export function feedbackView(store) {
       const done = [...store.processed].reverse().slice(0, 40);
       el.innerHTML = `
         <h1 class="large-title page-title">Feedback</h1>
-        <p class="subtitle">${store.profile?.id === 'personal' ? 'Claude applies these every morning at 7:00' : 'Claude applies these at half past every hour on weekdays'}. Next run ${esc(nextRunLabel())}.</p>
+        <p class="subtitle">Claude applies these on its next run, ${esc(nextRunLabel())}.</p>
         ${syncBanner(store)}
         <div class="grid">
           ${panel({ title: 'Waiting for the next run', count: pending.length || null, body: pending.length ? `<ul class="rows fb-list">${pending.map(withdrawable).join('')}</ul>` : '<p class="muted">Nothing waiting. Tap any item in your brief to remove it or add a note.</p>' })}
@@ -769,7 +770,7 @@ export function routinesHTML(store, { withModels = false } = {}) {
       <div class="routine-head">
         <div class="routine-text">
           <p class="routine-name">${esc(r.name)}</p>
-          <p class="routine-meta">${esc(r.schedule)} · ${esc(modelLabel(store, r.model))}</p>
+          <p class="routine-meta">${esc(r.schedules ? nextRunLine(store, r) : `${r.schedule} · ${modelLabel(store, r.model)}`)}</p>
         </div>
         <button class="btn btn-run" type="button" data-run="${esc(r.key)}"${st.busy ? ' disabled' : ''}>${st.busy ? esc(st.text) : 'Run now'}</button>
       </div>
@@ -777,9 +778,7 @@ export function routinesHTML(store, { withModels = false } = {}) {
       ${st.error ? `<p class="routine-error">${esc(st.error)}</p>` : ''}
       ${st.session ? `<a class="mtg-more ext" href="${esc(st.session)}" target="_blank" rel="noopener noreferrer">Watch the run${ICON.chev}</a>` : ''}
       <p class="routine-last">${last}</p>
-      ${withModels ? `<fieldset class="models"><legend>Model</legend>${store.models.map((m) => `
-        <label class="model-opt"><input type="radio" name="model-${esc(r.key)}" value="${esc(m.value)}" data-model-for="${esc(r.key)}"${(r.model ?? 'sonnet') === m.value ? ' checked' : ''}>
-          <span class="model-text"><span class="model-name">${esc(m.label)}</span><span class="model-note">${esc(m.note ?? '')}</span></span></label>`).join('')}</fieldset>` : ''}
+      ${withModels ? `<div class="routine-sched"><h3 class="routine-sub">Schedule</h3>${scheduleEditorHTML(store, r)}</div>` : ''}
     </li>`;
   }).join('')}</ul>`;
 }
@@ -790,7 +789,7 @@ export function settingsPageHTML(store, alertsHTML = '') {
     <p class="subtitle">Routines, models and the connection to your vault</p>
     <div class="grid">
       ${store.profile?.id === 'personal' ? '' : panel({ title: 'Priorities', span: 12, body: `<button class="link-row prio-link" type="button" data-open-priorities><span>Projects, people and channels</span><span class="link-meta">${esc(prioritySummary(store))}</span>${ICON.chev}</button><p class="muted small">What the morning brief should never miss.</p>` })}
-      ${panel({ title: 'Routines', body: `${routinesHTML(store, { withModels: true })}<p class="muted small">Every routine uses Sonnet 5.5 unless you pick another model. A change applies from the routine's next run.</p>`, span: 12 })}
+      ${panel({ title: 'Routines', body: `${routinesHTML(store, { withModels: true })}<p class="muted small">Each time slot runs with the model you pick for it. Run now uses its own pick.</p>`, span: 12 })}
       ${alertsHTML ? panel({ title: 'Meeting alerts', body: alertsHTML, span: 12 }) : ''}
       ${panel({ title: 'Connection', body: settingsSheetHTML(store), span: 12 })}
     </div>`;

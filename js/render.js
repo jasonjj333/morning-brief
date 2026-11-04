@@ -1,3 +1,4 @@
+import { nextRunOf } from './schedule.js';
 import { esc, inline, plain, splitFrontmatter, parseBlocks, stripLeadEmoji, splitItem } from './md.js';
 
 // Every actionable line on screen is registered here, keyed by a short id in data-iid.
@@ -45,8 +46,16 @@ export function friendlyName(path) {
 // Personal: the daily brief at 13:00 UTC (7:00 Central in winter, 8:00 in summer).
 let schedule = 'hourly';
 export const setSchedule = (s) => { schedule = s; };
+// When routines have schedules set in the app, the next run comes from those instead.
+let routineSource = () => [];
+export const setRoutineSource = (fn) => { routineSource = fn; };
 export const scheduleKind = () => schedule;
 export function nextRun(from = new Date()) {
+  const list = routineSource() ?? [];
+  if (list.some((r) => r.schedules?.length)) {
+    const n = nextRunOf(list, from);
+    if (n) return n.at;
+  }
   const d = new Date(from);
   d.setUTCSeconds(0, 0);
   if (schedule === 'daily') {

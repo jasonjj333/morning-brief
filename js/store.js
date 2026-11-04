@@ -300,13 +300,31 @@ export class Store extends EventTarget {
 
   // The vault's GitHub Action fires the routine when this file changes.
   async requestRun(key) {
-    const req = { id: crypto.randomUUID(), routine: key, at: new Date().toISOString() };
+    const r = this.routines.find((x) => x.key === key);
+    const req = { id: crypto.randomUUID(), routine: key, at: new Date().toISOString(), ...(r?.run_model ? { model: r.run_model } : {}) };
     await this.mutate('Feedback/run-requests.json', (text) => {
       const doc = safeJsonDoc(text, 'requests');
       doc.requests = [...doc.requests, req].slice(-50);
       return JSON.stringify(doc, null, 2) + '\n';
     }, `app: run ${key} now`);
     return req;
+  }
+
+  // Settings → Routines. The scheduler reads these; `schedule` is the plain-words summary shown elsewhere.
+  async saveSchedules(key, schedules, runModel) {
+    const { describeAll } = await import('./schedule.js');
+    await this.mutate('Feedback/routines.json', (text) => {
+      const doc = JSON.parse(text);
+      const r = doc.routines.find((x) => x.key === key);
+      if (!r) throw Object.assign(new Error('That routine is gone. Pull to refresh.'), { status: 0 });
+      r.schedules = schedules.map(({ id, days, type, time, every, from, to, model }) => (type === 'every'
+        ? { id, days, type, every, from, to, model }
+        : { id, days, type: 'at', time, model }));
+      r.run_model = runModel;
+      r.schedule = describeAll(r.schedules);
+      doc.schedules_updated = new Date().toISOString();
+      return JSON.stringify(doc, null, 2) + '\n';
+    }, `app: ${key} schedule`);
   }
 
   async setModel(key, model) {

@@ -1,5 +1,6 @@
 import { Store, target, PROFILES, activeProfile, rememberProfile } from './store.js';
-import { nextRunLabel, rowPills, setSchedule } from './render.js';
+import { nextRunLabel, rowPills, setSchedule, setRoutineSource } from './render.js';
+import { initScheduleUI, clearScheduleDrafts } from './schedule-ui.js';
 import { personalTodayView, draftsView, filteredView, findSender, senderSheetHTML } from './personal.js';
 import { Navigator } from './nav.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
@@ -15,6 +16,8 @@ import {
 
 let store = new Store(activeProfile());
 setSchedule(store.profile.schedule);
+setRoutineSource(() => store.routines);
+initScheduleUI(() => store);
 const $ = (s, r = document) => r.querySelector(s);
 
 const ICONS = {
@@ -103,6 +106,7 @@ async function switchProfile(id) {
   setSchedule(store.profile.schedule);
   store.addEventListener('change', onStoreChange);
   rememberProfile(id);
+  clearScheduleDrafts();
   workShadow = null;
   registry.clear();
   const tabs = tabsFor(id);
