@@ -283,7 +283,23 @@ export function todayView(store) {
       </div>`;
 
       ctx.section = 'Top 3 today';
-      const topBody = topList ? `<ol class="rows rows-top">${topList.items.map((it) => rowHTML(ctx, { text: it.text, line: it.line })).join('')}</ol>` : '<p class="muted">No priorities in this brief.</p>';
+      // Project notes: one group per project (h3), then the team. Everything about them, not just what's for you.
+      const proj = sec.find(/project notes/i);
+      let projBody = '<p class="muted">Project and team updates start with the next morning brief.</p>';
+      if (proj) {
+        const lead = [], groups = [];
+        let g = null;
+        for (const b of proj.blocks) {
+          if (b.t === 'h' && b.level === 3) { g = { title: stripLeadEmoji(b.text), blocks: [] }; groups.push(g); }
+          else (g ? g.blocks : lead).push(b);
+        }
+        ctx.section = 'Project notes';
+        projBody = (lead.length ? renderBlocks(lead, ctx) : '') + groups.map((x) => {
+          ctx.section = `Project notes · ${x.title}`;
+          return `<div class="proj-group"><h3 class="proj-title">${inline(x.title, ctx)}</h3>${renderBlocks(x.blocks, ctx)}</div>`;
+        }).join('');
+        if (!projBody.trim()) projBody = '<p class="muted">Nothing new on your projects.</p>';
+      }
 
       ctx.section = "Today's meetings";
       const meetBody = meetings.length ? `<ul class="rows">${meetings.map((m) => meetingHTML(store, ctx, m, isToday)).join('')}</ul>` : '<p class="muted">No meetings.</p>';
@@ -324,7 +340,7 @@ export function todayView(store) {
         ${weekStrip(store)}
         <div class="grid">
           ${tiles}
-          ${panel({ title: 'Top 3 today', body: topBody, span: 6, cls: 'panel-top' })}
+          ${panel({ title: 'Project notes', body: projBody, span: 6, cls: 'panel-proj' })}
           ${panel({ title: "Today's meetings", count: isToday ? live.length : null, body: meetBody, span: 6 })}
           ${panel({ title: 'To do today', count: todoOpen, body: todoBody, span: 6 })}
           ${panel({ title: 'This week', count: weekRows.length, body: weekBody, span: 6 })}
