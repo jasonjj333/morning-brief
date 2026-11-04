@@ -9,6 +9,7 @@ import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
   itemSheetHTML, addSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
   routinesHTML, settingsPageHTML, RECORD_LEAD, draftHTML, journalDrafts, journalStatus,
+  prioritiesView, priorityChipsHTML, cleanPriority,
 } from './views.js';
 
 let store = new Store(activeProfile());
@@ -46,7 +47,7 @@ function makeView(route) {
   };
   const views = store.profile.id === 'personal'
     ? { today: personalTodayView, events: eventsView, drafts: draftsView, feedback: feedbackView, filtered: filteredView }
-    : { today: todayView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView };
+    : { today: todayView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView, priorities: prioritiesView };
   const v = (views[route] ?? views.today)(store);
   if (route === 'today') v.navLeft = profileChip;
   return v;
@@ -66,7 +67,7 @@ function onStoreChange(e) {
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => {
     let k = pendingKind;
-    if (k === 'data' && document.activeElement?.matches?.('[data-journal-text]')) k = 'local';
+    if (k === 'data' && document.activeElement?.matches?.('[data-journal-text], [data-prio-input]')) k = 'local';
     pendingKind = 'status';
     if (k === 'data') { registry.clear(); nav.refreshAll(); }
     else if (k === 'local') { const cur = nav.current; nav.refreshAll({ except: cur?.view.liveRefresh ? null : cur }); patchRows(cur?.el); }
@@ -251,6 +252,9 @@ document.addEventListener('click', (e) => {
     navigator.clipboard?.writeText(text).then(() => toast('Stand-up notes copied'), () => toast('Could not copy. Select the text and copy it.'));
     return;
   }
+  if (e.target.closest('[data-open-priorities]')) { closeAllSheets(); if (nav.current?.view.route !== 'priorities') nav.push('priorities'); return; }
+  const pr = e.target.closest('[data-prio-remove]');
+  if (pr) { removePriority(pr); return; }
   if (e.target.closest('[data-open-filtered]')) { if (nav.current?.view.route !== 'filtered') nav.push('filtered'); return; }
   const snd = e.target.closest('[data-sender]');
   if (snd) { senderSheet(snd.dataset.sender); return; }
@@ -310,6 +314,60 @@ async function toggle(row) {
     await store.toggleTask(item, done);
     toast(done ? 'Marked done' : 'Reopened');
   } catch (e) { row.classList.toggle('is-done', !done); failed(e); }
+}
+
+// ---------- priorities ----------
+
+// Redraw just the chips of one list, so text typed in the other boxes stays put.
+function redrawPriorities(key, added) {
+  for (const box of document.querySelectorAll(`[data-prio-list="${key}"]`)) {
+    box.innerHTML = priorityChipsHTML(store, key);
+    if (added) box.querySelector(`[data-value="${CSS.escape(added)}"]`)?.closest('.prio-chip')?.classList.add('is-new');
+  }
+}
+
+document.addEventListener('input', (e) => {
+  const input = e.target.closest('[data-prio-input]');
+  if (input) input.form.querySelector('button[type=submit]').disabled = !input.value.trim();
+});
+
+document.addEventListener('submit', async (e) => {
+  const form = e.target.closest('[data-prio-add]');
+  if (!form) return;
+  e.preventDefault();
+  const key = form.dataset.prioAdd;
+  const input = form.querySelector('input');
+  const btn = form.querySelector('button[type=submit]');
+  const value = cleanPriority(key, input.value);
+  if (!value) return;
+  const exists = store.priorities[key].some((v) => v.toLowerCase() === value.toLowerCase());
+  if (exists) { toast('Already on the list'); input.select(); return; }
+  btn.disabled = true;
+  try {
+    await store.editPriorities(key, (list) => [...list, value], `app: priority ${key} + ${value}`);
+    input.value = '';
+    redrawPriorities(key, value);
+    toast('Added. Applies from the next brief.');
+  } catch (err) { btn.disabled = false; failed(err); }
+  input.focus();
+});
+
+async function removePriority(btn) {
+  const key = btn.dataset.prioRemove, value = btn.dataset.value;
+  const chip = btn.closest('.prio-chip');
+  await collapseChip(chip);
+  try {
+    await store.editPriorities(key, (list) => list.filter((v) => v !== value), `app: priority ${key} - ${value}`);
+    redrawPriorities(key);
+    toast(`Removed ${value}`);
+  } catch (err) { chip.style.opacity = ''; chip.style.transform = ''; failed(err); }
+}
+
+function collapseChip(chip) {
+  if (!chip || matchMedia('(prefers-reduced-motion: reduce)').matches) return Promise.resolve();
+  return animate(chip, [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.7)' }], spring({ response: 0.22, damping: 1 })).then(() => {
+    chip.style.opacity = '0'; chip.style.transform = 'scale(0.7)';
+  });
 }
 
 function failed(e) { toast(e?.message || 'Could not save. Check your connection.', { tone: 'error' }); }

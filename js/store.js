@@ -274,6 +274,28 @@ export class Store extends EventTarget {
   get filtered() { return this.json('Feedback/filtered.json', null); }
   get blocked() { return this.json('Feedback/blocked.json', { blocked: [] }).blocked ?? []; }
   get mailActions() { return this.json('Feedback/mail-actions.json', { actions: [] }).actions ?? []; }
+  // High-priority projects, people and Slack channels for the work brief (the routine reads this file every run).
+  get priorities() {
+    const d = this.json('Feedback/priorities.json', {}) ?? {};
+    const list = (k) => (Array.isArray(d[k]) ? d[k].filter((x) => typeof x === 'string' && x.trim()) : []);
+    return { projects: list('projects'), people: list('people'), channels: list('channels'), quiet_channels: list('quiet_channels') };
+  }
+
+  async editPriorities(key, fn, message) {
+    return this.mutate('Feedback/priorities.json', (text) => {
+      let doc;
+      try { doc = JSON.parse(text ?? ''); } catch { doc = null; }
+      if (!doc || typeof doc !== 'object' || Array.isArray(doc)) doc = { version: 1 };
+      const before = Array.isArray(doc[key]) ? doc[key] : [];
+      const after = fn(before.slice());
+      if (JSON.stringify(after) === JSON.stringify(before)) return null;
+      doc[key] = after;
+      doc.version ??= 1;
+      doc.updated = new Date().toISOString();
+      return JSON.stringify(doc, null, 2) + '\n';
+    }, message);
+  }
+
   get drafts() { return this.json('Feedback/drafts.json', { drafts: [] }).drafts ?? []; }
 
   // The vault's GitHub Action fires the routine when this file changes.

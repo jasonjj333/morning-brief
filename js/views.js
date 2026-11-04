@@ -322,7 +322,7 @@ export function todayView(store) {
           ${panel({ title: 'Waiting on others', body: waitBody, span: 6 })}
           ${journalPanel(store, { span: 6 })}
           ${sources ? `<div class="span-12">${renderBlocks([sources], ctx)}</div>` : ''}
-          <div class="span-12 foot-links"><a class="wl link-row" href="#" data-note="${esc(path)}"><span>Open the full brief</span>${ICON.chev}</a><a class="wl link-row" href="#" data-note="Home Dashboard/Home Dashboard.md"><span>Home Dashboard</span>${ICON.chev}</a></div>
+          <div class="span-12 foot-links"><a class="wl link-row" href="#" data-note="${esc(path)}"><span>Open the full brief</span>${ICON.chev}</a><a class="wl link-row" href="#" data-note="Home Dashboard/Home Dashboard.md"><span>Home Dashboard</span>${ICON.chev}</a><button class="link-row prio-link" type="button" data-open-priorities><span>Priorities</span><span class="link-meta">${esc(prioritySummary(store))}</span>${ICON.chev}</button></div>
         </div>`;
     },
   };
@@ -570,6 +570,63 @@ export function feedbackRow(f) {
 // Check-offs already changed the note, so only notes, removals and additions can be withdrawn.
 const withdrawable = (f) => feedbackRow(f).replace('</li>', /^(done|reopen)$/.test(f.action) ? '</li>' : `<button class="text-btn fb-withdraw" type="button" data-withdraw="${esc(f.id)}">Withdraw</button></li>`);
 
+// ---------- Priorities (work) ----------
+
+export const PRIORITY_LISTS = [
+  { key: 'projects', title: 'Projects', one: 'project', placeholder: 'Checkout redesign (client name, React)',
+    help: 'Anything about these is high priority, wherever it comes up. Put other names for it in brackets so Claude can find it.' },
+  { key: 'people', title: 'People', one: 'person', placeholder: 'Your project lead',
+    help: 'What they ask of you, your team or your projects is high priority. Their posts elsewhere, like an IT question, aren’t.' },
+  { key: 'channels', title: 'Slack channels', one: 'channel', placeholder: 'project-general', hash: true,
+    help: 'Checked one by one every morning, private ones too. A post to everyone here counts even without an @mention.' },
+  { key: 'quiet_channels', title: 'Never high priority', one: 'channel', placeholder: 'ask-internal-it', hash: true,
+    help: 'Help desks and social channels. Posts here only make the brief when they name you, even from people above.' },
+];
+
+// "#Project General " → "project-general"; people and projects keep their own spelling.
+export function cleanPriority(key, value) {
+  const v = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const list = PRIORITY_LISTS.find((l) => l.key === key);
+  return list?.hash ? v.replace(/^#+/, '').replace(/\s+/g, '-').toLowerCase() : v;
+}
+
+export function priorityChipsHTML(store, key) {
+  const list = PRIORITY_LISTS.find((l) => l.key === key);
+  const items = store.priorities[key];
+  if (!items.length) return `<p class="muted small prio-empty">No ${list.key === 'quiet_channels' ? 'channels' : list.title.toLowerCase()} yet.</p>`;
+  return `<ul class="prio-chips">${items.map((v) => `<li class="prio-chip${key === 'quiet_channels' ? ' prio-quiet' : ''}"><span class="prio-text">${list.hash ? '#' : ''}${esc(v)}</span><button type="button" class="prio-remove" data-prio-remove="${esc(key)}" data-value="${esc(v)}" aria-label="Remove ${esc(v)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></button></li>`).join('')}</ul>`;
+}
+
+export function prioritySummary(store) {
+  const p = store.priorities;
+  const parts = PRIORITY_LISTS.slice(0, 3).map((l) => p[l.key].length ? `${p[l.key].length} ${p[l.key].length === 1 ? l.one : l.one === 'person' ? 'people' : l.one + 's'}` : '').filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Nothing set yet';
+}
+
+export function prioritiesView(store) {
+  return {
+    route: 'priorities', title: 'Priorities',
+    render(el) {
+      if (!store.connected) { el.innerHTML = `<h1 class="large-title page-title">Priorities</h1><div class="grid">${connectPanel(store)}</div>`; return; }
+      el.innerHTML = `
+        <h1 class="large-title page-title">Priorities</h1>
+        <p class="subtitle">The morning brief searches these first, marks what it finds with ⭐ and turns their requests into to-dos. Changes apply from the next morning brief.</p>
+        ${syncBanner(store)}
+        <div class="grid">
+          ${PRIORITY_LISTS.map((l) => panel({ title: esc(l.title), span: 6, cls: 'panel-prio', body: `
+            <div data-prio-list="${l.key}">${priorityChipsHTML(store, l.key)}</div>
+            <form class="prio-add" data-prio-add="${l.key}" autocomplete="off">
+              <label class="sr-only" for="prio-${l.key}">Add ${esc(l.one)}</label>
+              ${l.hash ? '<span class="prio-hash" aria-hidden="true">#</span>' : ''}
+              <input id="prio-${l.key}" data-prio-input enterkeyhint="done" autocapitalize="${l.hash ? 'off' : 'words'}" spellcheck="false" placeholder="${esc(l.placeholder)}">
+              <button class="btn btn-small" type="submit" disabled>Add</button>
+            </form>
+            <p class="muted small">${l.help}</p>` })).join('')}
+        </div>`;
+    },
+  };
+}
+
 export function feedbackView(store) {
   return {
     route: 'feedback', title: 'Feedback',
@@ -705,6 +762,7 @@ export function settingsPageHTML(store) {
     <h1 class="large-title page-title">Settings</h1>
     <p class="subtitle">Routines, models and the connection to your vault</p>
     <div class="grid">
+      ${store.profile?.id === 'personal' ? '' : panel({ title: 'Priorities', span: 12, body: `<button class="link-row prio-link" type="button" data-open-priorities><span>Projects, people and channels</span><span class="link-meta">${esc(prioritySummary(store))}</span>${ICON.chev}</button><p class="muted small">What the morning brief should never miss.</p>` })}
       ${panel({ title: 'Routines', body: `${routinesHTML(store, { withModels: true })}<p class="muted small">Every routine uses Sonnet 5.5 unless you pick another model. A change applies from the routine's next run.</p>`, span: 12 })}
       ${panel({ title: 'Connection', body: settingsSheetHTML(store), span: 12 })}
     </div>`;
