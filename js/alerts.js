@@ -198,7 +198,8 @@ export function alertsSettingsHTML() {
     ${sw('sound', 'Play a sound', 'A short chime with the pop-up.')}
     <div class="alert-opt"><span class="alert-opt-text"><span class="alert-opt-name">System notifications</span><span class="alert-opt-note">${NOTIFY_TEXT[n]}</span></span>
       ${n === 'default' ? '<button class="btn btn-small" type="button" data-alert-notify>Turn on</button>' : ''}</div>
-    <button class="btn btn-wide" type="button" data-alert-test>Show a test alert</button>
+    <button class="btn btn-wide" type="button" data-alert-test>Show a test alert in 5 seconds</button>
+    <p class="muted small">Switch to another tab or app after tapping it to see the system notification too.</p>
     <p class="muted small">Alerts come from the app itself, so keep Morning Brief open in a tab or as an installed app. A closed app can’t alert you.</p>
   </div>`;
 }
@@ -213,7 +214,10 @@ document.addEventListener('change', (e) => {
   if (t) setAlertPrefs({ [t.dataset.alertPref]: t.checked });
 });
 document.addEventListener('click', (e) => {
-  if (e.target.closest('[data-alert-test]')) testAlert();
+  const b = e.target.closest('[data-alert-test]');
+  if (!b || b.disabled) return;
+  b.disabled = true; b.textContent = 'Test alert coming in 5 seconds…';
+  setTimeout(() => { testAlert(); b.disabled = false; b.textContent = 'Show a test alert in 5 seconds'; }, 5000);
 });
 document.addEventListener('alerts-changed', () => {
   for (const box of document.querySelectorAll('[data-alert-settings]')) box.outerHTML = alertsSettingsHTML();
