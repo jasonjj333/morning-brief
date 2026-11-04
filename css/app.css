@@ -908,6 +908,26 @@ tr.is-removing td { text-decoration: line-through; color: var(--muted); }
 .week.week-7 { grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .week.week-7 .day { min-height: 84px; }
 
+/* ---------- what I did today ---------- */
+
+.journal-text {
+  width: 100%; box-sizing: border-box; display: block;
+  min-height: 132px; resize: vertical;
+  field-sizing: content; max-height: 60vh;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); color: var(--text);
+  font: inherit; font-size: 15px; line-height: 1.5;
+  transition: border-color 0.18s, background-color 0.18s;
+}
+.journal-text:focus { outline: none; border-color: var(--accent); background: var(--raised); }
+.journal-text::placeholder { color: var(--muted); opacity: 0.7; }
+.journal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.journal-status { font-size: 13px; color: var(--muted); }
+.btn.btn-small { height: 34px; padding: 0 16px; font-size: 14px; }
+.panel-head .panel-action { margin-left: auto; padding: 4px; }
+.standup { font-size: 15px; line-height: 1.5; }
+.standup .rows { margin-top: 0; }
+
 /* ---------- drafts ---------- */
 
 .draft-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

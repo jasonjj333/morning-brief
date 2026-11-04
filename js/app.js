@@ -8,7 +8,7 @@ import { animate, spring } from './motion.js';
 import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
   itemSheetHTML, addSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
-  routinesHTML, settingsPageHTML, RECORD_LEAD, draftHTML,
+  routinesHTML, settingsPageHTML, RECORD_LEAD, draftHTML, journalDrafts, journalStatus,
 } from './views.js';
 
 let store = new Store(activeProfile());
@@ -65,7 +65,8 @@ function onStoreChange(e) {
   if (RANK[kind] > RANK[pendingKind]) pendingKind = kind;
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => {
-    const k = pendingKind;
+    let k = pendingKind;
+    if (k === 'data' && document.activeElement?.matches?.('[data-journal-text]')) k = 'local';
     pendingKind = 'status';
     if (k === 'data') { registry.clear(); nav.refreshAll(); }
     else if (k === 'local') { const cur = nav.current; nav.refreshAll({ except: cur?.view.liveRefresh ? null : cur }); patchRows(cur?.el); }
@@ -199,6 +200,14 @@ document.addEventListener('click', (e) => {
     nav.push('note:' + path);
     return;
   }
+  const js = e.target.closest('[data-journal-save]');
+  if (js) { saveJournal(journalBox(js)); return; }
+  const cs = e.target.closest('[data-copy-standup]');
+  if (cs) {
+    const text = cs.closest('.panel').querySelector('[data-standup]')?.innerText.trim() ?? '';
+    navigator.clipboard?.writeText(text).then(() => toast('Stand-up notes copied'), () => toast('Could not copy. Select the text and copy it.'));
+    return;
+  }
   const prof = e.target.closest('button[data-switch]');
   if (prof) { switchProfile(prof.dataset.switch); return; }
   const dc = e.target.closest('[data-draft-id]');
@@ -271,6 +280,49 @@ async function send(item, action, note = '') {
     toast(action === 'remove' ? `Claude removes it at ${nextRunLabel()}` : action === 'confirm' ? 'Confirmed' : 'Sent to Claude');
   } catch (e) { failed(e); }
 }
+
+// ---------- What I did today ----------
+
+// Saves a second and a half after you stop typing, when you leave the box, or on Save.
+const journalTimers = new Map();
+function journalBox(el) { return el.closest('[data-journal]'); }
+async function saveJournal(box) {
+  const path = box.dataset.journal;
+  const key = store.profile.id + ':' + path;
+  clearTimeout(journalTimers.get(key));
+  if (!journalDrafts.has(key)) return;
+  const text = journalDrafts.get(key);
+  const status = box.querySelector('[data-journal-status]');
+  const btn = box.querySelector('[data-journal-save]');
+  status.textContent = 'Saving…';
+  btn.disabled = true;
+  try {
+    await store.saveJournal(path, text);
+    // Typed more while saving? Keep that as the next draft.
+    if (journalDrafts.get(key) === text) journalDrafts.delete(key);
+    status.textContent = journalDrafts.has(key) ? 'Not saved yet' : journalStatus(store, path) || 'Saved';
+    btn.disabled = !journalDrafts.has(key);
+  } catch (e) {
+    status.textContent = 'Not saved yet';
+    btn.disabled = false;
+    failed(e);
+  }
+}
+document.addEventListener('input', (e) => {
+  const ta = e.target.closest?.('[data-journal-text]');
+  if (!ta) return;
+  const box = journalBox(ta);
+  const key = store.profile.id + ':' + box.dataset.journal;
+  journalDrafts.set(key, ta.value);
+  box.querySelector('[data-journal-status]').textContent = 'Not saved yet';
+  box.querySelector('[data-journal-save]').disabled = false;
+  clearTimeout(journalTimers.get(key));
+  journalTimers.set(key, setTimeout(() => { if (box.isConnected) saveJournal(box); }, 1500));
+});
+document.addEventListener('focusout', (e) => {
+  const ta = e.target.closest?.('[data-journal-text]');
+  if (ta) saveJournal(journalBox(ta));
+});
 
 // ---------- swipes ----------
 

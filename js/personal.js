@@ -2,7 +2,7 @@
 import { esc, inline, plain, splitItem } from './md.js';
 import { Ctx, renderBlocks, rowHTML, parseNote, sections, nextRunLabel } from './render.js';
 import {
-  ICON, panel, syncBanner, heroHTML, loading, connectPanel, weekStrip, upcoming, feedbackRow, addButton,
+  ICON, panel, syncBanner, heroHTML, loading, connectPanel, weekStrip, upcoming, addButton, journalPanel,
   latestDaily, today, sameDay, parseYmd, ago,
 } from './views.js';
 
@@ -36,7 +36,7 @@ export function personalTodayView(store) {
       if (!store.connected) { el.innerHTML = `${heroHTML(store, null)}<div class="grid">${connectPanel(store)}</div>`; return; }
       const path = latestDaily(store);
       if (!path) {
-        el.innerHTML = `${heroHTML(store, null)}${syncBanner(store)}${store.syncing && !store.hasData ? loading() : `<div class="grid">${panel({ title: 'No brief yet', body: `<p class="muted">Your first personal brief arrives at 7:00 tomorrow morning, or tap ${ICON.run.replace('<svg', '<svg class="inline-icon"')} to run it now.</p>` })}</div>`}`;
+        el.innerHTML = `${heroHTML(store, null)}${syncBanner(store)}${store.syncing && !store.hasData ? loading() : `<div class="grid">${panel({ title: 'No brief yet', body: `<p class="muted">Your first personal brief arrives at 7:00 tomorrow morning, or tap ${ICON.run.replace('<svg', '<svg class="inline-icon"')} to run it now.</p>` })}${journalPanel(store, { span: 12 })}</div>`}`;
         return;
       }
       const ctx = new Ctx(store, path);
@@ -64,7 +64,6 @@ export function personalTodayView(store) {
       const sources = callouts.find((b) => b.kind === 'quote');
       const filteredCount = Number(data.filtered) || 0;
 
-      const pending = store.pending;
       const firstTop = topList?.items[0];
       const n = mailOpen.length;
       const finding = firstTop && !/nothing urgent/i.test(firstTop.text)
@@ -103,10 +102,6 @@ export function personalTodayView(store) {
         sinceBody = `${tldr ? `<div class="tldr">${renderBlocks(tldr.children, ctx)}</div>` : ''}${renderBlocks(rest, ctx)}`;
       }
 
-      const pendBody = pending.length
-        ? `<ul class="rows">${pending.slice(-4).reverse().map(feedbackRow).join('')}</ul><button class="text-btn" type="button" data-goto="feedback">See all feedback</button>`
-        : `<p class="muted">Tap any item to remove it or tell Claude what to change, like "this sender is never important". Claude applies it at ${esc(nextRunLabel())}.</p>`;
-
       el.innerHTML = `
         ${heroHTML(store, data, finding)}
         ${syncBanner(store)}
@@ -119,7 +114,7 @@ export function personalTodayView(store) {
           ${panel({ title: 'Important email', count: n, body: mailBody, span: 12 })}
           ${panel({ title: 'Drafted replies', count: drafts.length || null, body: replyBody, span: 6 })}
           ${since ? panel({ title: 'Since yesterday', body: sinceBody, span: 6 }) : ''}
-          ${panel({ title: 'Sent to Claude', count: pending.length || null, body: pendBody, span: 6 })}
+          ${journalPanel(store, { span: 12 })}
           ${filtered || sources ? `<div class="span-12">${renderBlocks([filtered, sources].filter(Boolean), ctx)}</div>` : ''}
           <div class="span-12 foot-links"><a class="wl link-row" href="#" data-note="${esc(path)}"><span>Open the full brief</span>${ICON.chev}</a></div>
         </div>`;

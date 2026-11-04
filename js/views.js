@@ -161,6 +161,49 @@ export function connectPanel(store) {
 
 export function loading() { return '<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading your notes</div>'; }
 
+// ---------- What I did today ----------
+
+// Unsaved text survives redraws (a sync, a profile switch) until it's saved.
+export const journalDrafts = new Map();
+export const journalPath = (d = today()) => `Journal/${ymd(d)}.md`;
+export function journalSaved(store, path) {
+  const text = store.text(path);
+  if (text == null) return { body: '', updated: null };
+  const m = /^---\n([\s\S]*?)\n---\n?/.exec(text);
+  const updated = m ? (/^updated:\s*(.+)$/m.exec(m[1]) || [])[1]?.trim() ?? null : null;
+  return { body: (m ? text.slice(m[0].length) : text).replace(/^\n+/, '').replace(/\s+$/, ''), updated };
+}
+export function journalStatus(store, path) {
+  const key = store.profile.id + ':' + path;
+  if (journalDrafts.has(key)) return 'Not saved yet';
+  const { updated } = journalSaved(store, path);
+  return updated ? `Saved ${ago(updated)}` : '';
+}
+
+export function journalPanel(store, { span = 6 } = {}) {
+  const path = journalPath();
+  const key = store.profile.id + ':' + path;
+  const work = store.profile.id !== 'personal';
+  const value = journalDrafts.get(key) ?? journalSaved(store, path).body;
+  const help = work
+    ? `Tomorrow's brief turns this into your stand-up notes, along with your meetings, Slack and email. Edit it any time before the next refresh.`
+    : `Tomorrow's brief folds this into Since yesterday. Edit it any time before the next refresh.`;
+  const placeholder = work
+    ? 'Paired with De\'Aun on the Pelago account setup. Got SSO working in dev. Blocked on the AWS sandbox quota; asked Ben. Next: data migration script.'
+    : 'Booked the dentist. Paid the water bill. Called Mom about Thanksgiving.';
+  return panel({
+    title: 'What I did today', span, cls: 'panel-journal',
+    body: `<div class="journal" data-journal="${esc(path)}">
+      <textarea class="journal-text" data-journal-text rows="5" placeholder="${esc(placeholder)}" aria-label="What I did today">${esc(value)}</textarea>
+      <div class="journal-foot">
+        <span class="journal-status" data-journal-status aria-live="polite">${esc(journalStatus(store, path))}</span>
+        <button class="btn btn-small" type="button" data-journal-save${journalDrafts.has(key) ? '' : ' disabled'}>Save</button>
+      </div>
+      <p class="muted small">${help}</p>
+    </div>`,
+  });
+}
+
 // ---------- Today ----------
 
 export function latestDaily(store) {
@@ -186,7 +229,7 @@ export function todayView(store) {
     render(el) {
       if (!store.connected) { el.innerHTML = `${heroHTML(store, null)}<div class="grid">${connectPanel(store)}</div>`; return; }
       const path = latestDaily(store);
-      if (!path) { el.innerHTML = `${heroHTML(store, null)}${syncBanner(store)}${store.syncing && !store.hasData ? loading() : '<div class="grid">' + panel({ title: 'No brief yet', body: '<p class="muted">The first brief arrives at 7:00 on the next weekday.</p>' }) + '</div>'}`; return; }
+      if (!path) { el.innerHTML = `${heroHTML(store, null)}${syncBanner(store)}${store.syncing && !store.hasData ? loading() : '<div class="grid">' + panel({ title: 'No brief yet', body: '<p class="muted">The first brief arrives at 7:00 on the next weekday.</p>' }) + journalPanel(store, { span: 12 }) + '</div>'}`; return; }
 
       const ctx = new Ctx(store, path);
       const { data, blocks } = parseNote(store, path);
@@ -243,7 +286,7 @@ export function todayView(store) {
         text: `${r.cells[1]} — ${[r.cells[2], r.cells[3]].filter(Boolean).join(' · ')}`, line: r.line, kind: 'row',
       }).replace('<div class="row-body">', `<div class="row-body"><span class="row-time">${inline(r.cells[0], ctx)}</span>`)).join('')}</ul>` : '<p class="muted">Nothing due this week.</p>';
 
-      let yestBody = '';
+      let yestBody = '', standup = null, standupBody = '';
       if (yest) {
         ctx.section = 'Yesterday';
         const tldr = yest.blocks.find((b) => b.t === 'callout');
@@ -253,16 +296,15 @@ export function todayView(store) {
           if (b.t === 'h' && b.level === 3) { cur = { title: stripLeadEmoji(b.text), blocks: [] }; parts.push(cur); }
           else if (cur && b !== tldr) cur.blocks.push(b);
         }
+        standup = parts.find((p) => /stand-?up/i.test(p.title));
+        const cols = parts.filter((p) => p !== standup);
+        if (standup) { ctx.section = 'Yesterday · Stand-up notes'; standupBody = `<div class="standup" data-standup>${renderBlocks(standup.blocks, ctx)}</div>`; }
         yestBody = `${tldr ? `<div class="tldr">${renderBlocks(tldr.children, ctx)}</div>` : ''}
-          <div class="yest-cols">${parts.map((p) => { ctx.section = `Yesterday · ${p.title}`; return `<div class="yest-col"><h3>${esc(p.title)}</h3>${renderBlocks(p.blocks, ctx)}</div>`; }).join('')}</div>`;
+          <div class="yest-cols">${cols.map((p) => { ctx.section = `Yesterday · ${p.title}`; return `<div class="yest-col"><h3>${esc(p.title)}</h3>${renderBlocks(p.blocks, ctx)}</div>`; }).join('')}</div>`;
       }
 
       ctx.section = 'Waiting on others';
       const waitBody = waiting ? renderBlocks(waiting.blocks, ctx) : '<p class="muted">Nobody owes you anything.</p>';
-
-      const pendBody = pending.length
-        ? `<ul class="rows">${pending.slice(-4).reverse().map(feedbackRow).join('')}</ul><button class="text-btn" type="button" data-goto="feedback">See all feedback</button>`
-        : '<p class="muted">Tap any item to confirm it, remove it, or tell Claude what to change. Claude applies it within the hour on weekdays.</p>';
 
       const yLabel = yest ? stripLeadEmoji(yest.title) : 'Yesterday';
       el.innerHTML = `
@@ -275,9 +317,10 @@ export function todayView(store) {
           ${panel({ title: "Today's meetings", count: isToday ? live.length : null, body: meetBody, span: 6 })}
           ${panel({ title: 'To do today', count: todoOpen, body: todoBody, span: 6 })}
           ${panel({ title: 'This week', count: weekRows.length, body: weekBody, span: 6 })}
+          ${standup ? panel({ title: 'Stand-up notes', body: standupBody, span: 12, cls: 'panel-standup', action: `<button class="text-btn panel-action" type="button" data-copy-standup>Copy</button>` }) : ''}
           ${yest ? panel({ title: esc(yLabel), body: yestBody, span: 12, cls: 'panel-yest' }) : ''}
           ${panel({ title: 'Waiting on others', body: waitBody, span: 6 })}
-          ${panel({ title: 'Sent to Claude', count: pending.length || null, body: pendBody, span: 6 })}
+          ${journalPanel(store, { span: 6 })}
           ${sources ? `<div class="span-12">${renderBlocks([sources], ctx)}</div>` : ''}
           <div class="span-12 foot-links"><a class="wl link-row" href="#" data-note="${esc(path)}"><span>Open the full brief</span>${ICON.chev}</a><a class="wl link-row" href="#" data-note="Home Dashboard/Home Dashboard.md"><span>Home Dashboard</span>${ICON.chev}</a></div>
         </div>`;

@@ -304,6 +304,13 @@ export class Store extends EventTarget {
     }, 'app: edit draft');
   }
 
+  // "What I did today": one note per day in Journal/, read by the next brief.
+  async saveJournal(path, body) {
+    const date = path.match(/(\d{4}-\d{2}-\d{2})/)[1];
+    const text = `---\ntype: journal\ndate: ${date}\nupdated: ${new Date().toISOString()}\ntags: [journal]\n---\n\n${body.trim()}\n`;
+    return this.mutate(path, (cur) => (cur == null && !body.trim() ? null : text), `app: what I did ${date}`);
+  }
+
   async setDraftStatus(id, status) {
     await this.mutate('Feedback/drafts.json', (text) => {
       const doc = safeJsonDoc(text, 'drafts');
