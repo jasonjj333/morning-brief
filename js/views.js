@@ -768,13 +768,14 @@ export function routinesHTML(store, { withModels = false } = {}) {
   }).join('')}</ul>`;
 }
 
-export function settingsPageHTML(store) {
+export function settingsPageHTML(store, alertsHTML = '') {
   return `
     <h1 class="large-title page-title">Settings</h1>
     <p class="subtitle">Routines, models and the connection to your vault</p>
     <div class="grid">
       ${store.profile?.id === 'personal' ? '' : panel({ title: 'Priorities', span: 12, body: `<button class="link-row prio-link" type="button" data-open-priorities><span>Projects, people and channels</span><span class="link-meta">${esc(prioritySummary(store))}</span>${ICON.chev}</button><p class="muted small">What the morning brief should never miss.</p>` })}
       ${panel({ title: 'Routines', body: `${routinesHTML(store, { withModels: true })}<p class="muted small">Every routine uses Sonnet 5.5 unless you pick another model. A change applies from the routine's next run.</p>`, span: 12 })}
+      ${alertsHTML ? panel({ title: 'Meeting alerts', body: alertsHTML, span: 12 }) : ''}
       ${panel({ title: 'Connection', body: settingsSheetHTML(store), span: 12 })}
     </div>`;
 }

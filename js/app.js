@@ -5,6 +5,7 @@ import { Navigator } from './nav.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
 import { animate, spring } from './motion.js';
+import { checkMeetingAlerts, alertsSettingsHTML } from './alerts.js';
 import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
   itemSheetHTML, addSheetHTML, dayItemsHTML, placeThumb, registry, ago, meetingStatus,
@@ -43,7 +44,7 @@ function makeView(route) {
   if (route.startsWith('note:')) return noteView(store, route.slice(5));
   if (route === 'settings') return {
     route: 'settings', title: 'Settings',
-    render(el) { el.innerHTML = settingsPageHTML(store); bindSettings(el); },
+    render(el) { el.innerHTML = settingsPageHTML(store, alertsSettingsHTML()); bindSettings(el); },
   };
   const views = store.profile.id === 'personal'
     ? { today: personalTodayView, events: eventsView, drafts: draftsView, feedback: feedbackView, filtered: filteredView }
@@ -72,9 +73,16 @@ function onStoreChange(e) {
     if (k === 'data') { registry.clear(); nav.refreshAll(); }
     else if (k === 'local') { const cur = nav.current; nav.refreshAll({ except: cur?.view.liveRefresh ? null : cur }); patchRows(cur?.el); }
     chrome();
+    checkAlerts();
   });
 }
 store.addEventListener('change', onStoreChange);
+
+// Meeting alerts follow your work calendar even while you're looking at Personal.
+let workShadow = null;
+const alertStore = () => (store.profile.id === 'work' ? store : (workShadow ??= new Store('work')));
+const checkAlerts = () => { try { checkMeetingAlerts(alertStore()); } catch (e) { console.warn('meeting alerts', e); } };
+setInterval(checkAlerts, 10_000);
 
 // ---------- profiles ----------
 
@@ -95,6 +103,7 @@ async function switchProfile(id) {
   setSchedule(store.profile.schedule);
   store.addEventListener('change', onStoreChange);
   rememberProfile(id);
+  workShadow = null;
   registry.clear();
   const tabs = tabsFor(id);
   nav.reset(tabs, makeView);
@@ -220,7 +229,7 @@ function openInApp(kind, web) {
 
 document.addEventListener('click', (e) => {
   if (switching) { e.preventDefault(); return; }
-  const rec = e.target.closest('a.mtg-record');
+  const rec = e.target.closest('a.mtg-record, a.alert-record');
   if (rec) {
     // Let the link open Glean in a new tab; copy the name in case Glean doesn't fill the title.
     e.stopPropagation();
@@ -228,11 +237,11 @@ document.addEventListener('click', (e) => {
     toast(`Opening Glean. "${rec.dataset.title}" is copied if you need to paste the title.`);
     return;
   }
-  const appLink = e.target.closest('a.mtg-join, a.mtg-link');
+  const appLink = e.target.closest('a.mtg-join, a.mtg-link, a.alert-join');
   if (appLink) {
     e.preventDefault();
     e.stopPropagation();
-    openInApp(appLink.classList.contains('mtg-join') ? 'join' : 'outlook', appLink.href);
+    openInApp(appLink.matches('.mtg-join, .alert-join') ? 'join' : 'outlook', appLink.href);
     return;
   }
   const link = e.target.closest('a[data-note]');
@@ -723,6 +732,7 @@ setInterval(tickMeetings, 15_000);
 // ---------- keep fresh ----------
 
 document.addEventListener('visibilitychange', () => {
+  checkAlerts();
   if (document.visibilityState !== 'visible') return;
   tickMeetings();
   if (Date.now() - store.syncedAt > 60_000) store.sync();
@@ -735,4 +745,5 @@ for (const t of tabsFor(store.profile.id)) nav.stack(t.id);
 nav.restore(history.state?.profile && history.state.profile !== store.profile.id ? null : history.state);
 chrome();
 store.sync();
+checkAlerts();
 document.documentElement.classList.add('ready');
