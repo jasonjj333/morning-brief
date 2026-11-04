@@ -630,7 +630,11 @@ export function routineState(store, key) {
 }
 
 export function routinesHTML(store, { withModels = false } = {}) {
-  if (!store.routines.length) return '<p class="muted">No routines found in the vault yet.</p>';
+  if (!store.routines.length) {
+    if (store.error) return `<p class="routine-error">${esc(store.error.message)}</p>`;
+    if (!store.connected) return `<p class="muted">Connect ${esc(store.config.repo)} in Settings to see its routines.</p>`;
+    return store.syncing ? '<p class="muted">Loading routines…</p>' : '<p class="muted">No routines found in the vault yet.</p>';
+  }
   return `<ul class="routine-list">${store.routines.map((r) => {
     const st = routineState(store, r.key);
     const last = st.last ? `Last run ${esc(ago(st.last.at))}${st.last.kind === 'manual' ? ' (manual)' : ''}${st.last.summary ? ` · ${esc(st.last.summary)}` : ''}` : 'No runs logged yet';
