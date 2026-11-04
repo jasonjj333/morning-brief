@@ -75,8 +75,8 @@ export function meetingRows(table, dateStr) {
 }
 
 export const RECORD_LEAD = 5 * 60_000;
-// Glean's web app starts a new meeting note at /notes/new. Glean doesn't document a title parameter, so the app
-// also copies the meeting name when the button is used.
+// Glean starts a new meeting note at /notes/new. It ignores the title parameter (notes start "Untitled"), so the
+// app also copies the meeting name when the button is used.
 export const gleanNoteUrl = (title) => `https://app.glean.com/notes/new?title=${encodeURIComponent(title)}`;
 
 // "in 23 min" within the hour, like Outlook; "Now · 12 min left" while it runs.
