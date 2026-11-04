@@ -210,17 +210,20 @@ function appUrl(kind, web) {
     }
     if (kind === 'join' && /teams\.(microsoft|live)\.com$/.test(u.hostname)) return web.replace(/^https:/, 'msteams:');
     if (kind === 'outlook') return 'ms-outlook://events';
+    // Glean's own web page hands off with glean://notes/new, which the desktop app doesn't handle. The desktop app
+    // does open glean://app.glean.com/<path> in its own window, where meeting notes can record.
+    if (kind === 'glean' && !isMobile && u.hostname === 'app.glean.com') return web.replace(/^https:/, 'glean:');
   } catch { /* not a URL */ }
   return null;
 }
 
 // Hand the link to the app. No timed fallback: the browser's "Open Microsoft Outlook?" prompt keeps this page in
 // front, which looked like "app not installed" and opened the website instead. Offer the web link in a toast.
-function openInApp(kind, web) {
+function openInApp(kind, web, message) {
   const app = appUrl(kind, web);
   if (!app) { window.open(web, '_blank', 'noopener'); return; }
   location.href = app;
-  toast(kind === 'join' ? 'Opening the meeting app…' : 'Opening Outlook…', {
+  toast(message ?? (kind === 'join' ? 'Opening the meeting app…' : 'Opening Outlook…'), {
     action: { label: 'Open in browser', run: () => window.open(web, '_blank', 'noopener') },
   });
 }
@@ -231,10 +234,14 @@ document.addEventListener('click', (e) => {
   if (switching) { e.preventDefault(); return; }
   const rec = e.target.closest('a.mtg-record, a.alert-record');
   if (rec) {
-    // Let the link open Glean in a new tab; copy the name in case Glean doesn't fill the title.
+    // Open meeting notes in the Glean desktop app (the web page can't record); copy the name in case Glean
+    // doesn't fill the title. On a phone, or without the app, the web page opens instead.
     e.stopPropagation();
     navigator.clipboard?.writeText(rec.dataset.title).catch(() => {});
-    toast(`Opening Glean. "${rec.dataset.title}" is copied if you need to paste the title.`);
+    if (appUrl('glean', rec.href)) {
+      e.preventDefault();
+      openInApp('glean', rec.href, `Opening meeting notes in the Glean app. "${rec.dataset.title}" is copied for the title.`);
+    } else toast(`Opening Glean. "${rec.dataset.title}" is copied if you need to paste the title.`);
     return;
   }
   const appLink = e.target.closest('a.mtg-join, a.mtg-link, a.alert-join');
