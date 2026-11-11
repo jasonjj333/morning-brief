@@ -3,6 +3,7 @@ import { nextRunLabel, rowPills, setSchedule, setRoutineSource } from './render.
 import { initScheduleUI, clearScheduleDrafts } from './schedule-ui.js';
 import { personalTodayView, draftsView, filteredView, findSender, senderSheetHTML } from './personal.js';
 import { Navigator } from './nav.js';
+import { initPress } from './press.js';
 import { projectHomeView, projectUpdatesView, projectReposView, repoDetailView, projectLearnView, projectDecisionsView } from './project.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
@@ -19,6 +20,7 @@ let store = new Store(activeProfile());
 setSchedule(store.profile.schedule);
 setRoutineSource(() => store.routines);
 initScheduleUI(() => store);
+initPress();
 const $ = (s, r = document) => r.querySelector(s);
 
 const ICONS = {

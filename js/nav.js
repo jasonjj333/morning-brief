@@ -29,14 +29,37 @@ export class Navigator {
 
   buildTabbar() {
     const wrap = this.tabbar.querySelector('.tabs');
-    wrap.innerHTML = this.tabs.map((t) => `
+    wrap.innerHTML = `<span class="tab-thumb" aria-hidden="true"></span>` + this.tabs.map((t) => `
       <button class="tab" type="button" role="tab" data-tab="${t.id}" aria-selected="false">
         <span class="tab-icon">${t.icon}</span><span class="tab-label">${t.label}</span><span class="tab-count" data-count="${t.id}"></span>
       </button>`).join('');
+    this.thumbAt = null;
+    if (!this.thumbWatch) {
+      // The sidebar highlight follows layout changes (window resize, sidebar appearing at desktop width).
+      this.thumbWatch = new ResizeObserver(() => this.placeThumb(false));
+      this.thumbWatch.observe(this.tabbar);
+    }
+  }
+
+  // Desktop sidebar: one highlight that glides between tabs on a spring instead of jumping.
+  placeThumb(animateIt = true) {
+    const thumb = this.tabbar.querySelector('.tab-thumb');
+    const b = this.tabbar.querySelector(`[data-tab="${this.active}"]`);
+    if (!thumb || !b || !b.offsetHeight || getComputedStyle(thumb).display === 'none') return;
+    const to = { y: b.offsetTop, h: b.offsetHeight };
+    const from = this.thumbAt;
+    this.thumbAt = to;
+    thumb.style.transform = `translateY(${to.y}px)`;
+    thumb.style.height = `${to.h}px`;
+    thumb.style.opacity = '1';
+    if (!animateIt || !from || reducedMotion.matches) return;
+    thumb.getAnimations().forEach((a) => a.cancel());
+    animate(thumb, [{ transform: `translateY(${from.y}px)`, height: `${from.h}px` }, { transform: `translateY(${to.y}px)`, height: `${to.h}px` }], spring({ response: 0.36, damping: 0.82 }));
   }
 
   // Swap in another profile's tabs and pages.
   reset(tabs, makeView) {
+    this.tabSwap?.finish();
     for (const s of this.stacks.values()) { for (const p of s.pages) p.view.onLeave?.(); s.el.remove(); }
     this.stacks.clear();
     this.active = null;
@@ -74,15 +97,54 @@ export class Navigator {
     const next = this.stack(tabId);
     this.active = tabId;
     for (const b of this.tabbar.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tabId));
-    if (prev && prev !== next) {
-      next.el.hidden = false;
-      animate(next.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' });
-      prev.el.hidden = true;
-    } else next.el.hidden = false;
+    if (prev && prev !== next) this.crossfade(prev, next);
+    else next.el.hidden = false;
+    this.placeThumb(!!prev && prev !== next);
+    if (prev && prev !== next) this.bounceIcon(tabId);
     this.freshen(this.current, next);
     if (this.current) this.onScroll(this.current);
     this.current?.view.onShow?.();
     if (record) history.replaceState({ tab: tabId, routes: this.routes }, '');
+  }
+
+  // Tab change: the old page eases back and fades while the new one glides in from the side of its tab,
+  // on a spring. A second tap mid-transition finishes the first one at once.
+  crossfade(prev, next) {
+    this.tabSwap?.finish();
+    const order = this.tabs.map((t) => t.id);
+    const dir = Math.sign(order.indexOf(next.id) - order.indexOf(prev.id)) || 1;
+    next.el.hidden = false;
+    prev.el.style.pointerEvents = 'none';
+    prev.el.style.zIndex = '0';
+    next.el.style.zIndex = '1';
+    const calm = reducedMotion.matches;
+    const sIn = spring({ response: 0.42, damping: 0.92 });
+    const out = prev.el.animate(
+      calm ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-dir * 24}px) scale(0.985)` }],
+      { duration: calm ? 120 : 200, easing: 'cubic-bezier(0.4, 0, 0.6, 1)', fill: 'forwards' },
+    );
+    const inn = next.el.animate(
+      calm ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: `translateX(${dir * 36}px) scale(0.99)` }, { opacity: 1, transform: 'none' }],
+      { duration: calm ? 120 : sIn.duration, easing: calm ? 'ease-out' : sIn.easing, fill: 'none' },
+    );
+    const done = () => {
+      if (this.tabSwap?.out !== out) return;
+      this.tabSwap = null;
+      out.cancel();
+      inn.cancel();
+      prev.el.hidden = true;
+      prev.el.style.pointerEvents = prev.el.style.zIndex = next.el.style.zIndex = '';
+    };
+    this.tabSwap = { out, finish: done };
+    Promise.all([out.finished, inn.finished]).then(done, done);
+  }
+
+  // The tapped tab's icon pops, like UITabBar.
+  bounceIcon(tabId) {
+    const icon = this.tabbar.querySelector(`[data-tab="${tabId}"] .tab-icon`);
+    if (!icon || reducedMotion.matches) return;
+    animate(icon, [{ transform: 'scale(0.82)' }, { transform: 'scale(1)' }], spring({ response: 0.4, damping: 0.5 }))
+      .then(() => { icon.style.transform = ''; });
   }
 
   mount(stack, view) {
@@ -167,7 +229,13 @@ export class Navigator {
       animate(page.el, [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }], s),
       animate(under.el, [{ transform: 'translateX(0)' }, { transform: `translateX(${-PARALLAX * 100}%)` }], s),
       animate(under.el.querySelector('.shade'), [{ opacity: 0 }, { opacity: SHADE }], s),
-    ]).then(() => { this.busy = false; });
+      // The back label slides in from the middle and the old page's bar fades, as UINavigationBar does.
+      animate(page.el.querySelector('.back'), [{ opacity: 0, transform: 'translateX(40px)' }, { opacity: 1, transform: 'none' }], s),
+      animate(under.el.querySelector('.navbar'), [{ opacity: 1 }, { opacity: 0.4 }], s),
+    ]).then(() => {
+      this.busy = false;
+      const b = page.el.querySelector('.back'); if (b) { b.style.opacity = ''; b.style.transform = ''; }
+    });
   }
 
   // The browser (or our back button) moved history; follow it.
@@ -196,6 +264,7 @@ export class Navigator {
     under.el.inert = false;
     under.el.style.transform = '';
     under.el.querySelector('.shade').style.opacity = '';
+    under.el.querySelector('.navbar').style.opacity = '';
     this.freshen(under, stack);
     under.view.onShow?.();
   }
@@ -212,7 +281,9 @@ export class Navigator {
       animate(top.el, [{ transform: `translateX(${x0}px)` }, { transform: 'translateX(100%)' }], s),
       animate(under.el, [{ transform: `translateX(${(-PARALLAX * (1 - from)) * 100}%)` }, { transform: 'translateX(0)' }], s),
       animate(under.el.querySelector('.shade'), [{ opacity: SHADE * (1 - from) }, { opacity: 0 }], s),
+      animate(under.el.querySelector('.navbar'), [{ opacity: 0.4 + 0.6 * from }, { opacity: 1 }], s),
     ]).then(() => {
+      under.el.querySelector('.navbar').style.opacity = '';
       top.view.onLeave?.();
       top.el.remove();
       under.el.inert = false;

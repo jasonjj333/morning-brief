@@ -1362,3 +1362,43 @@ tr.is-removing td { text-decoration: line-through; color: var(--muted); }
   .step { flex-direction: column; }
   .concept-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ---------- motion: press feedback, tab highlight, disclosures ---------- */
+
+/* Press: sink fast, spring back with a little bounce (easing and duration come from motion.js). */
+.pressable {
+  transition:
+    transform var(--press-release-ms, 420ms) var(--press-release-ease, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    background-color 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pressable.is-pressed {
+  transform: scale(var(--press-scale, 0.97));
+  transition: transform 0.09s cubic-bezier(0.2, 0, 0, 1), background-color 0.06s, opacity 0.06s;
+}
+.link-row.is-pressed, .note-row.is-pressed, .menu-item.is-pressed, .concept-row.is-pressed,
+.team-chip.is-pressed, .repo-tile.is-pressed, .profile-opt.is-pressed { background: var(--surface-2); }
+.icon-btn.is-pressed, .back.is-pressed, .text-btn.is-pressed, .side-btn.is-pressed { opacity: 0.45; }
+.tab.pressable { transition: color 0.2s; }
+.tab.is-pressed { transform: none; }
+.tab.is-pressed .tab-icon { transform: scale(0.84); transition: transform 0.09s cubic-bezier(0.2, 0, 0, 1); }
+
+/* Sidebar highlight that glides between tabs (desktop only). */
+.tabs { position: relative; }
+.tab-thumb { display: none; }
+@media (min-width: 900px) {
+  .tab-thumb {
+    display: block; position: absolute; top: 0; left: 0; right: 0; height: 36px;
+    border-radius: 10px; background: var(--surface-2); opacity: 0; pointer-events: none; z-index: 0;
+  }
+  .tab { z-index: 1; }
+  .tab[aria-selected="true"] { background: transparent; }
+}
+
+/* Tab pages stack while they cross-fade. */
+.stack { will-change: auto; }
+details[data-animating] > summary .chev { transition-duration: 0.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pressable.is-pressed { transform: none; }
+}

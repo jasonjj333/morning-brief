@@ -1,5 +1,6 @@
 import { esc, inline, plain, splitFrontmatter, stripLeadEmoji, splitItem } from './md.js';
 import { scheduleEditorHTML, nextRunLine } from './schedule-ui.js';
+import { swapContent } from './press.js';
 import { Ctx, renderBlocks, rowHTML, parseNote, sections, noteTitle, friendlyName, registry, resolveNote, nextRunLabel, draftFor } from './render.js';
 
 const DAILY = 'Daily/';
@@ -500,10 +501,12 @@ export function notesView(store) {
       el.querySelector('.segmented').addEventListener('click', (e) => {
         const b = e.target.closest('[data-seg]');
         if (!b || b.dataset.seg === state.seg) return;
+        const keys = segs.map(([k]) => k);
+        const dir = Math.sign(keys.indexOf(b.dataset.seg) - keys.indexOf(state.seg)) || 1;
         state.seg = b.dataset.seg;
         for (const x of el.querySelectorAll('[data-seg]')) x.setAttribute('aria-selected', String(x === b));
         placeThumb(el.querySelector('.segmented'), true);
-        draw();
+        swapContent(list, draw, dir);
       });
     },
     onShow() { const s = this.page?.content.querySelector('.segmented'); if (s) placeThumb(s, false); },

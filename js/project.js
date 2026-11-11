@@ -6,6 +6,7 @@
 
 import { esc, inline, plain, stripLeadEmoji } from './md.js';
 import { Ctx, renderBlocks, parseNote, sections, noteTitle } from './render.js';
+import { swapContent } from './press.js';
 import { panel, connectPanel, syncBanner, loading, ICON, ago, parseYmd, shortDate, longDate, today, placeThumb } from './views.js';
 
 const ROOT = 'Projects/CTS Search/';
@@ -45,16 +46,18 @@ function guard(store, el, title) {
 }
 
 // A segmented control like the Notes page uses; onPick(key) redraws the list below it.
-function segmented(el, segs, state, onPick) {
+function segmented(el, segs, state, onPick, box) {
   const bar = el.querySelector('.segmented');
   placeThumb(bar, false);
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-seg]');
     if (!b || b.dataset.seg === state.seg) return;
+    const keys = segs.map(([k]) => k);
+    const dir = Math.sign(keys.indexOf(b.dataset.seg) - keys.indexOf(state.seg)) || 1;
     state.seg = b.dataset.seg;
     for (const x of bar.querySelectorAll('[data-seg]')) x.setAttribute('aria-selected', String(x === b));
     placeThumb(bar, true);
-    onPick(state.seg);
+    swapContent(box, () => onPick(state.seg), dir);
   });
 }
 const segHTML = (segs, cur, label) => `<div class="segmented" role="tablist" aria-label="${esc(label)}"><span class="seg-thumb" aria-hidden="true"></span>${segs.map(([k, l]) => `<button type="button" role="tab" data-seg="${k}" aria-selected="${cur === k}">${esc(l)}</button>`).join('')}</div>`;
@@ -362,7 +365,7 @@ export function projectLearnView(store) {
         }).join('');
       };
       draw();
-      segmented(el, segs, state, draw);
+      segmented(el, segs, state, draw, box);
     },
     onShow() { const s = this.page?.content.querySelector('.segmented'); if (s) placeThumb(s, false); },
   };
@@ -438,7 +441,7 @@ export function projectDecisionsView(store) {
       const box = el.querySelector('.dec-body');
       const draw = () => { box.innerHTML = state.seg === 'questions' ? questionsHTML(store) : state.seg === 'stories' ? storiesHTML(store) : decisionsHTML(store); };
       draw();
-      segmented(el, segs, state, draw);
+      segmented(el, segs, state, draw, box);
     },
     onShow() { const s = this.page?.content.querySelector('.segmented'); if (s) placeThumb(s, false); },
   };
