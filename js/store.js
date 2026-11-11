@@ -16,6 +16,14 @@ export const PROFILES = {
     dev: '/__devp', schedule: 'daily',
   },
 };
+// Project reads the same vault as Work (its Projects/CTS Search/ second brain), so it shares Work's token,
+// cache and unsent changes: nothing new to set up, and no second copy of the vault in this browser.
+PROFILES.project = {
+  id: 'project', label: 'Project', blurb: 'CTS Search second brain',
+  keys: PROFILES.work.keys,
+  defaults: PROFILES.work.defaults,
+  dev: '/__dev', schedule: 'hourly',
+};
 const PROFILE_KEY = 'brief.profile';
 export const activeProfile = () => (PROFILES[read(PROFILE_KEY, 'work')] ? read(PROFILE_KEY, 'work') : 'work');
 export const rememberProfile = (id) => write(PROFILE_KEY, id);

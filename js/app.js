@@ -3,7 +3,7 @@ import { nextRunLabel, rowPills, setSchedule, setRoutineSource } from './render.
 import { initScheduleUI, clearScheduleDrafts } from './schedule-ui.js';
 import { personalTodayView, draftsView, filteredView, findSender, senderSheetHTML } from './personal.js';
 import { Navigator } from './nav.js';
-import { projectView } from './project.js';
+import { projectHomeView, projectUpdatesView, projectReposView, repoDetailView, projectLearnView, projectDecisionsView } from './project.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
 import { animate, spring } from './motion.js';
@@ -26,7 +26,6 @@ const ICONS = {
 };
 const WORK_TABS = [
   { id: 'today', label: 'Today', route: 'today', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16M7 18a5 5 0 0 1 10 0M12 5v2.5M5.4 9.4l1.7 1.4M18.6 9.4l-1.7 1.4"/></svg>' },
-  { id: 'project', label: 'My Project', route: 'project', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l8 4.5-8 4.5-8-4.5z"/><path d="M4 12l8 4.5 8-4.5M4 16l8 4.5 8-4.5"/></svg>' },
   { id: 'actions', label: 'Actions', route: 'actions', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.4l2.4 2.4 4.7-5.2"/></svg>' },
   { id: 'events', label: 'Upcoming', route: 'events', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="3"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>' },
   { id: 'notes', label: 'Notes', route: 'notes', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6"/></svg>' },
@@ -38,9 +37,17 @@ const PERSONAL_TABS = [
   { id: 'drafts', label: 'Drafts', route: 'drafts', icon: ICONS.drafts },
   WORK_TABS.find((t) => t.id === 'feedback'),
 ];
-const tabsFor = (id) => (id === 'personal' ? PERSONAL_TABS : WORK_TABS);
+// Project: the CTS Search second brain, read from the work vault. Informational, nothing to triage.
+const PROJECT_TABS = [
+  { id: 'p-home', label: 'Overview', route: 'p-home', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l8 4.5-8 4.5-8-4.5z"/><path d="M4 12l8 4.5 8-4.5M4 16l8 4.5 8-4.5"/></svg>' },
+  { id: 'p-updates', label: 'Updates', route: 'p-updates', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>' },
+  { id: 'p-repos', label: 'Repos', route: 'p-repos', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="6" r="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="8" r="2"/><path d="M7 8v8M17 10c0 4-10 2-10 6"/></svg>' },
+  { id: 'p-learn', label: 'Learn', route: 'p-learn', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5L12 4.5l8.5 4-8.5 4z"/><path d="M7 10.5v4.5c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-4.5M20.5 8.5v5.5"/></svg>' },
+  { id: 'p-decisions', label: 'Decisions', route: 'p-decisions', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M12 8h6l2 2-2 2h-6M12 13H6l-2 2 2 2h6"/></svg>' },
+];
+const tabsFor = (id) => (id === 'personal' ? PERSONAL_TABS : id === 'project' ? PROJECT_TABS : WORK_TABS);
 
-// The profile chip at the top left of Today switches between Work and Personal.
+// The profile chip at the top left of each profile's first page switches between Work, Personal and Project.
 const profileChip = () => `<button class="profile-chip" type="button" data-action="profile" aria-haspopup="menu" aria-expanded="false" aria-label="Profile: ${store.profile.label}. Switch profile">
   <span class="profile-dot profile-${store.profile.id}" aria-hidden="true"></span><span>${store.profile.label}</span>
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>`;
@@ -51,11 +58,16 @@ function makeView(route) {
     route: 'settings', title: 'Settings',
     render(el) { el.innerHTML = settingsPageHTML(store, alertsSettingsHTML()); bindSettings(el); },
   };
-  const views = store.profile.id === 'personal'
+  if (route.startsWith('repo:')) return repoDetailView(store, route.slice(5));
+  const id = store.profile.id;
+  const views = id === 'personal'
     ? { today: personalTodayView, events: eventsView, drafts: draftsView, feedback: feedbackView, filtered: filteredView }
-    : { today: todayView, project: projectView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView, priorities: prioritiesView };
-  const v = (views[route] ?? views.today)(store);
-  if (route === 'today') v.navLeft = profileChip;
+    : id === 'project'
+      ? { 'p-home': projectHomeView, 'p-updates': projectUpdatesView, 'p-repos': projectReposView, 'p-learn': projectLearnView, 'p-decisions': projectDecisionsView }
+      : { today: todayView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView, priorities: prioritiesView };
+  const home = tabsFor(id)[0].route;
+  const v = (views[route] ?? views[home])(store);
+  if (route === home) v.navLeft = profileChip;
   return v;
 }
 
@@ -255,6 +267,12 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     openInApp(appLink.matches('.mtg-join, .alert-join') ? 'join' : 'outlook', appLink.href);
+    return;
+  }
+  const push = e.target.closest('[data-push]');
+  if (push) {
+    e.preventDefault();
+    if (nav.current?.view.route !== push.dataset.push) nav.push(push.dataset.push);
     return;
   }
   const link = e.target.closest('a[data-note]');
