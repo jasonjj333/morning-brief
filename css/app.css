@@ -1251,3 +1251,56 @@ tr.is-removing td { text-decoration: line-through; color: var(--muted); }
 .sched-add { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .sched-runnow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); font-size: 14px; margin-bottom: 12px; }
 .sched-foot { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+
+/* ---------- My Project ---------- */
+
+.panel-update .tldr { margin-bottom: 12px; }
+.proj-you { margin: 0 0 12px; }
+.proj-sections { display: grid; gap: 8px; margin: 0 0 12px; }
+.proj-sections details.callout { margin: 0; }
+.proj-links { margin: 12px 0 0; }
+.mini-list { list-style: none; margin: 0 0 4px; padding: 0 4px; display: grid; gap: 10px; }
+.mini-list li { line-height: 1.45; overflow-wrap: anywhere; }
+.mini-list a, .pr-title a, .repo-head a.wl { color: var(--text); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent); text-underline-offset: 2px; }
+.panel-focus .proj-title { margin-top: 0; }
+.panel-focus .mini-list + .proj-title { margin-top: 16px; }
+
+.repo-synced { margin: -4px 4px 12px; font-size: 13px; }
+.repo-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+.repo-card { background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-row); padding: 14px; min-width: 0; }
+.repo-head { display: flex; align-items: baseline; gap: 8px; }
+.repo-head h3 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.repo-gh { margin-left: auto; font-size: 13px; color: var(--accent); }
+.repo-sum { font-size: 13px; margin: 4px 0 10px; }
+.repo-card h4 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 14px 0 8px; }
+.repo-card .mini-list { padding: 0; font-size: 13px; }
+.repo-card code { font-size: 12px; }
+.pr-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.pr { padding: 0 0 12px; border-bottom: 1px solid var(--rule); }
+.pr:last-child { border-bottom: 0; padding-bottom: 0; }
+.pr-title { font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.pr-meta, .pr-note { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.pr .row-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.pr-sum { font-size: 13px; line-height: 1.45; margin: 6px 0 0; }
+
+.learn-hint { font-size: 13px; margin: -4px 4px 12px; }
+.concept-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.concept-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-row); background: var(--raised); border: 1px solid var(--border); text-decoration: none; }
+.concept-row:active { background: var(--surface-2); }
+.concept-name { font-weight: 500; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.concept-line { font-size: 13px; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.panel-learn details.more { margin-top: 6px; }
+.panel-learn details.more summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 8px 4px; color: var(--accent); font-weight: 500; font-size: 14px; }
+.panel-learn details.more summary::-webkit-details-marker { display: none; }
+.panel-learn details.more summary .chev { width: 16px; height: 16px; transition: transform 0.2s; }
+.panel-learn details.more[open] summary .chev { transform: rotate(90deg); }
+
+.team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.team-chip { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-row); background: var(--raised); border: 1px solid var(--border); text-decoration: none; min-width: 0; }
+.team-name { font-weight: 500; font-size: 14px; }
+.team-role { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+@media (min-width: 900px) {
+  .repo-grid { grid-template-columns: repeat(3, 1fr); }
+}

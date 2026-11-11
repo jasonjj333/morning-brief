@@ -3,6 +3,7 @@ import { nextRunLabel, rowPills, setSchedule, setRoutineSource } from './render.
 import { initScheduleUI, clearScheduleDrafts } from './schedule-ui.js';
 import { personalTodayView, draftsView, filteredView, findSender, senderSheetHTML } from './personal.js';
 import { Navigator } from './nav.js';
+import { projectView } from './project.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
 import { animate, spring } from './motion.js';
@@ -25,16 +26,17 @@ const ICONS = {
 };
 const WORK_TABS = [
   { id: 'today', label: 'Today', route: 'today', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16M7 18a5 5 0 0 1 10 0M12 5v2.5M5.4 9.4l1.7 1.4M18.6 9.4l-1.7 1.4"/></svg>' },
+  { id: 'project', label: 'My Project', route: 'project', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l8 4.5-8 4.5-8-4.5z"/><path d="M4 12l8 4.5 8-4.5M4 16l8 4.5 8-4.5"/></svg>' },
   { id: 'actions', label: 'Actions', route: 'actions', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.4l2.4 2.4 4.7-5.2"/></svg>' },
   { id: 'events', label: 'Upcoming', route: 'events', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="3"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>' },
   { id: 'notes', label: 'Notes', route: 'notes', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6"/></svg>' },
   { id: 'feedback', label: 'Feedback', route: 'feedback', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14A1.5 1.5 0 0 1 20.5 7v9a1.5 1.5 0 0 1-1.5 1.5h-9l-4.5 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 16V7A1.5 1.5 0 0 1 5 5.5z"/></svg>' },
 ];
 const PERSONAL_TABS = [
-  WORK_TABS[0],
-  WORK_TABS[2],
+  WORK_TABS.find((t) => t.id === 'today'),
+  WORK_TABS.find((t) => t.id === 'events'),
   { id: 'drafts', label: 'Drafts', route: 'drafts', icon: ICONS.drafts },
-  WORK_TABS[4],
+  WORK_TABS.find((t) => t.id === 'feedback'),
 ];
 const tabsFor = (id) => (id === 'personal' ? PERSONAL_TABS : WORK_TABS);
 
@@ -51,7 +53,7 @@ function makeView(route) {
   };
   const views = store.profile.id === 'personal'
     ? { today: personalTodayView, events: eventsView, drafts: draftsView, feedback: feedbackView, filtered: filteredView }
-    : { today: todayView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView, priorities: prioritiesView };
+    : { today: todayView, project: projectView, actions: actionsView, events: eventsView, notes: notesView, feedback: feedbackView, priorities: prioritiesView };
   const v = (views[route] ?? views.today)(store);
   if (route === 'today') v.navLeft = profileChip;
   return v;

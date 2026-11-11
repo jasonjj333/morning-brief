@@ -479,7 +479,7 @@ export function eventsView(store) {
 
 export function notesView(store) {
   const state = { seg: 'meetings', q: '' };
-  const segs = [['meetings', 'Meetings'], ['briefs', 'Briefs'], ['dashboard', 'Dashboard'], ['all', 'All']];
+  const segs = [['meetings', 'Meetings'], ['briefs', 'Briefs'], ['project', 'Project'], ['dashboard', 'Dashboard'], ['all', 'All']];
   return {
     route: 'notes', title: 'Notes',
     render(el) {
@@ -527,9 +527,10 @@ function noteListHTML(store, { seg, q }) {
   if (seg === 'meetings') files = files.filter((p) => p.startsWith('Meetings/'));
   if (seg === 'briefs') files = files.filter((p) => p.startsWith(DAILY));
   if (seg === 'dashboard') files = files.filter((p) => p.startsWith('Home Dashboard/'));
+  if (seg === 'project') files = files.filter((p) => p.startsWith('Projects/'));
   const needle = q.trim().toLowerCase();
   if (needle) files = files.filter((p) => p.toLowerCase().includes(needle) || (store.text(p) ?? '').toLowerCase().includes(needle));
-  files.sort((a, b) => (seg === 'dashboard' ? a.localeCompare(b) : b.localeCompare(a)));
+  files.sort((a, b) => (seg === 'dashboard' || seg === 'project' ? a.localeCompare(b) : b.localeCompare(a)));
   if (!files.length) return `<p class="muted empty">${needle ? 'No notes match.' : 'No notes here yet.'}</p>`;
   return `<ul class="list-card">${files.map((p) => {
     const { data } = splitFrontmatter(store.text(p) ?? '');
@@ -537,7 +538,7 @@ function noteListHTML(store, { seg, q }) {
     const d = parseYmd(data.date ?? noteTitle(p));
     if (p.startsWith(DAILY) && d) title = `Brief for ${longDate(d)}`;
     const who = Array.isArray(data.attendees) ? data.attendees.length : 0;
-    const sub = [d ? shortDate(d) : null, who ? `${who} attendee${who > 1 ? 's' : ''}` : null, seg === 'all' ? p.split('/').slice(0, -1).join('/') || 'Vault' : null].filter(Boolean).join(' · ');
+    const sub = [d ? shortDate(d) : null, who ? `${who} attendee${who > 1 ? 's' : ''}` : null, seg === 'all' ? p.split('/').slice(0, -1).join('/') || 'Vault' : seg === 'project' ? p.split('/').slice(2, -1).join(' / ') || 'Hub' : null].filter(Boolean).join(' · ');
     return `<li><a class="note-row wl" href="#" data-note="${esc(p)}"><span class="note-row-text"><span class="note-row-title">${esc(title)}</span>${sub ? `<span class="note-row-sub">${esc(sub)}</span>` : ''}</span>${ICON.chev}</a></li>`;
   }).join('')}</ul>`;
 }
