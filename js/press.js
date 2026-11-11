@@ -9,7 +9,8 @@ import { animate, spring, reducedMotion } from './motion.js';
 // Tappable things and how far each one sinks. More specific entries first.
 const PRESSABLE = [
   ['.tab', 0.9],
-  ['.icon-btn, .back, .prio-remove, .day-tog', 0.88],
+  ['.icon-btn, .back, .prio-remove, .day-tog, .learn-check', 0.86],
+  ['.learn-btn', 0.95],
   ['.btn, .profile-chip, .chip-link, .mtg-join, .mtg-record, .text-btn, .side-btn, .side-profiles button', 0.94],
   ['.segmented button, .add-row, .day', 0.95],
   ['.repo-tile, .team-chip, .concept-row, .profile-opt, .filtered-card, .sender-row, .draft-card', 0.975],

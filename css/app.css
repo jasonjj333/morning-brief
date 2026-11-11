@@ -1402,3 +1402,39 @@ details[data-animating] > summary .chev { transition-duration: 0.3s; }
 @media (prefers-reduced-motion: reduce) {
   .pressable.is-pressed { transform: none; }
 }
+
+/* ---------- Learn: learned checkbox and buttons ---------- */
+
+.concept-item { position: relative; min-width: 0; }
+.concept-row.has-check { padding-right: 50px; }
+.learn-check {
+  position: absolute; right: 10px; bottom: 10px;
+  width: 30px; height: 30px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1.75px solid var(--control); background: var(--raised); cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+.learn-check::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; } /* 46px touch target */
+.learn-check svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transform: scale(0.5); transition: opacity 0.15s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.learn-check:hover { border-color: var(--accent); }
+.learn-check.is-done { background: var(--accent); border-color: var(--accent); }
+.learn-check.is-done svg { opacity: 1; transform: scale(1); }
+.concept-item:has(.learn-check.is-done) .concept-name { color: var(--muted); }
+
+.learn-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1.5px solid var(--accent); border-radius: 999px; background: transparent; color: var(--accent);
+  font: inherit; font-weight: 600; cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.learn-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.learn-btn.is-done { background: var(--accent); color: #fff; }
+.learn-btn-top { height: 32px; padding: 0 12px 0 10px; font-size: 13px; }
+.learn-foot { display: flex; justify-content: center; margin: 32px 0 12px; }
+.learn-btn-big { height: 50px; padding: 0 26px; font-size: 16px; min-width: min(320px, 100%); }
+.learn-btn-big svg { width: 20px; height: 20px; }
+.learn-btn { white-space: nowrap; flex: none; }
+@media (max-width: 359px) {
+  .learn-btn-top { width: 32px; padding: 0; }
+  .learn-btn-top .learn-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+}

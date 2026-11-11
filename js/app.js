@@ -4,7 +4,7 @@ import { initScheduleUI, clearScheduleDrafts } from './schedule-ui.js';
 import { personalTodayView, draftsView, filteredView, findSender, senderSheetHTML } from './personal.js';
 import { Navigator } from './nav.js';
 import { initPress } from './press.js';
-import { projectHomeView, projectUpdatesView, projectReposView, repoDetailView, projectLearnView, projectDecisionsView } from './project.js';
+import { projectHomeView, projectUpdatesView, projectReposView, repoDetailView, projectLearnView, projectDecisionsView, isConcept, withLearnControls } from './project.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
 import { animate, spring } from './motion.js';
@@ -55,7 +55,10 @@ const profileChip = () => `<button class="profile-chip" type="button" data-actio
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>`;
 
 function makeView(route) {
-  if (route.startsWith('note:')) return noteView(store, route.slice(5));
+  if (route.startsWith('note:')) {
+    const path = route.slice(5);
+    return isConcept(path) ? withLearnControls(store, path, noteView(store, path)) : noteView(store, path);
+  }
   if (route === 'settings') return {
     route: 'settings', title: 'Settings',
     render(el) { el.innerHTML = settingsPageHTML(store, alertsSettingsHTML()); bindSettings(el); },

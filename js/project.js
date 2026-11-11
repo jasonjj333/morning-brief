@@ -7,6 +7,8 @@
 import { esc, inline, plain, stripLeadEmoji } from './md.js';
 import { Ctx, renderBlocks, parseNote, sections, noteTitle } from './render.js';
 import { swapContent } from './press.js';
+import { animate, spring, reducedMotion } from './motion.js';
+import { toast } from './sheet.js';
 import { panel, connectPanel, syncBanner, loading, ICON, ago, parseYmd, shortDate, longDate, today, placeThumb } from './views.js';
 
 const ROOT = 'Projects/CTS Search/';
@@ -321,6 +323,109 @@ export function repoDetailView(store, name) {
   };
 }
 
+// ---------- learned state ----------
+
+// A concept is "learned" when its note says `status: known`, the same flag Jason can set in Obsidian.
+// The app writes that line itself; unticking puts back whatever status the note had before.
+const CONCEPTS = P('Concepts/');
+export const isConcept = (path) => path.startsWith(CONCEPTS) && path.endsWith('.md');
+const statusOf = (store, path) => (parseNote(store, path).data.status || 'new').toLowerCase();
+const PREV_KEY = 'brief.learn.prev';
+const prevStatus = () => { try { return JSON.parse(localStorage.getItem(PREV_KEY)) ?? {}; } catch { return {}; } };
+const rememberPrev = (path, s) => { try { localStorage.setItem(PREV_KEY, JSON.stringify({ ...prevStatus(), [path]: s })); } catch { /* storage blocked */ } };
+
+function withStatus(text, status) {
+  const m = /^---\n([\s\S]*?)\n---/.exec(text ?? '');
+  if (!m) return `---\nstatus: ${status}\n---\n\n${text ?? ''}`;
+  const fm = /^status:.*$/m.test(m[1]) ? m[1].replace(/^status:.*$/m, `status: ${status}`) : `${m[1]}\nstatus: ${status}`;
+  return text.replace(m[0], `---\n${fm}\n---`);
+}
+
+const CHECK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.6 3.6 7.4-8"/></svg>';
+const checkHTML = (path, name, done, cls = '') => `<button class="learn-check${done ? ' is-done' : ''}${cls ? ` ${cls}` : ''}" type="button" data-learn-toggle="${esc(path)}" aria-pressed="${done}" aria-label="${done ? `Unmark ${esc(name)} as learned` : `Mark ${esc(name)} as learned`}">${CHECK_SVG}</button>`;
+const markLabel = (done) => (done ? 'Learned' : 'Mark learned');
+
+// Every control for one concept on screen (list checkbox, page buttons) shows the same state.
+function paint(path, done) {
+  const name = noteTitle(path);
+  for (const b of document.querySelectorAll('[data-learn-toggle]')) {
+    if (b.dataset.learnToggle !== path) continue;
+    b.classList.toggle('is-done', done);
+    b.setAttribute('aria-pressed', String(done));
+    if (b.classList.contains('learn-check')) b.setAttribute('aria-label', `${done ? 'Unmark' : 'Mark'} ${name} as learned`);
+    const label = b.querySelector('.learn-btn-label');
+    if (label) label.textContent = b.classList.contains('learn-btn-big') ? (done ? 'Learned · tap to undo' : 'Mark as learned') : markLabel(done);
+  }
+}
+
+let activeStore = null;
+let learnView = null;
+const busy = new Set();
+
+async function toggleLearned(path, btn) {
+  const store = activeStore;
+  if (!store || busy.has(path)) return;
+  const was = statusOf(store, path);
+  const done = was !== 'known';
+  const next = done ? 'known' : (prevStatus()[path] && prevStatus()[path] !== 'known' ? prevStatus()[path] : 'new');
+  busy.add(path);
+  paint(path, done);
+  if (!reducedMotion.matches) {
+    animate(btn, [{ transform: 'scale(0.7)' }, { transform: 'scale(1)' }], spring({ response: 0.38, damping: 0.5 })).then(() => { btn.style.transform = ''; });
+  }
+  // On the Learn list, an item that no longer fits the filter folds away once the tick has been seen.
+  const item = btn.closest('.concept-item');
+  const seg = learnView?.state.seg;
+  const leaves = item && seg && seg !== 'all' && seg !== (done ? 'known' : next);
+  const fold = leaves ? new Promise((r) => setTimeout(r, 380)).then(() => foldAway(item)) : Promise.resolve();
+  try {
+    await store.mutate(path, (text) => withStatus(text, next), `app: ${done ? 'learned' : 'not learned yet'} — ${noteTitle(path)}`);
+    if (done) rememberPrev(path, was);
+    await fold;
+    toast(done ? `Marked “${noteTitle(path)}” as learned` : `Moved “${noteTitle(path)}” back to ${next}`, {
+      action: { label: 'Undo', run: () => { const b = document.querySelector(`[data-learn-toggle="${CSS.escape(path)}"]`); toggleLearned(path, b ?? btn); } },
+    });
+  } catch (e) {
+    paint(path, !done);
+    if (item) { item.style.height = ''; item.style.opacity = ''; item.style.transform = ''; item.style.overflow = ''; }
+    toast(e?.status === 401 ? 'GitHub rejected the token. Check Settings.' : 'Couldn’t save that. Check your connection and try again.', { tone: 'negative' });
+  } finally {
+    busy.delete(path);
+    if (learnView?.page && btn.closest('.page') === learnView.page.el) learnView.nav.renderPage(learnView.page);
+  }
+}
+
+function foldAway(item) {
+  if (reducedMotion.matches) { item.style.opacity = '0'; return Promise.resolve(); }
+  const h = item.offsetHeight;
+  item.style.overflow = 'hidden';
+  return animate(item, [{ height: `${h}px`, opacity: 1, transform: 'scale(1)' }, { height: '0px', opacity: 0, transform: 'scale(0.96)' }], spring({ response: 0.36, damping: 1 }));
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-learn-toggle]');
+  if (!b) return;
+  e.preventDefault();
+  e.stopPropagation();
+  toggleLearned(b.dataset.learnToggle, b);
+}, true);
+
+// A concept note gets a "Mark learned" button in its top bar and a big one under the text.
+export function withLearnControls(store, path, view) {
+  const render = view.render.bind(view);
+  const done = () => statusOf(store, path) === 'known';
+  return {
+    ...view,
+    navRight: () => `<button class="learn-btn learn-btn-top${done() ? ' is-done' : ''}" type="button" data-learn-toggle="${esc(path)}" aria-pressed="${done()}">${CHECK_SVG}<span class="learn-btn-label">${markLabel(done())}</span></button>`,
+    render(el) {
+      activeStore = store;
+      render(el);
+      if (store.text(path) == null) return;
+      el.insertAdjacentHTML('beforeend', `<div class="learn-foot"><button class="learn-btn learn-btn-big${done() ? ' is-done' : ''}" type="button" data-learn-toggle="${esc(path)}" aria-pressed="${done()}">${CHECK_SVG}<span class="learn-btn-label">${done() ? 'Learned · tap to undo' : 'Mark as learned'}</span></button></div>`);
+    },
+  };
+}
+
 // ---------- 4. Learn ----------
 
 const CATEGORIES = [
@@ -332,19 +437,22 @@ const START_HERE = ['Overview/Architecture.md', 'Concepts/OpenSearch Serverless.
 export function projectLearnView(store) {
   const state = { seg: 'new' };
   return {
-    route: 'p-learn', title: 'Learn',
+    route: 'p-learn', title: 'Learn', state,
     render(el) {
+      activeStore = store;
+      learnView = this;
       if (!guard(store, el, 'Learn')) return;
       const cs = concepts(store);
       const count = (k) => cs.filter((c) => k === 'all' || c.status === k).length;
-      const segs = [['new', `New ${count('new')}`], ['learning', `Learning ${count('learning')}`], ['known', `Known ${count('known')}`], ['all', 'All']];
+      const segs = [['new', `New ${count('new')}`], ['learning', `Learning ${count('learning')}`], ['known', `Learned ${count('known')}`], ['all', 'All']];
       const start = START_HERE.filter((p) => has(store, P(p))).map((p) => {
         const path = P(p);
-        const line = p.startsWith('Concepts/') ? conceptLine(store, path) : 'How the pieces fit together, step by step.';
-        return `<li><a class="wl concept-row" href="#" data-note="${esc(path)}"><span class="concept-name">${esc(noteTitle(path))}</span><span class="concept-line">${esc(line)}</span></a></li>`;
+        const concept = isConcept(path);
+        const line = concept ? conceptLine(store, path) : 'How the pieces fit together, step by step.';
+        return `<li class="concept-item"><a class="wl concept-row${concept ? ' has-check' : ''}" href="#" data-note="${esc(path)}"><span class="concept-name">${esc(noteTitle(path))}</span><span class="concept-line">${esc(line)}</span></a>${concept ? checkHTML(path, noteTitle(path), statusOf(store, path) === 'known') : ''}</li>`;
       }).join('');
       el.innerHTML = `
-        ${pageHead('Learn', `${cs.length} explainers`, 'Every service, tool or idea that has come up on the project, explained in plain words and tied to how we use it. When you’ve got one, set its <code>status:</code> to <code>known</code> in Obsidian.')}
+        ${pageHead('Learn', `${cs.length} explainers`, 'Every service, tool or idea that has come up on the project, explained in plain words and tied to how we use it. Tick the circle when you’ve got one (it sets <code>status: known</code> in the note).')}
         ${syncBanner(store)}
         <div class="grid">
           ${start ? panel({ title: 'Start here', span: 12, body: `<ul class="concept-list concept-grid">${start}</ul>` }) : ''}
@@ -354,14 +462,14 @@ export function projectLearnView(store) {
       const draw = () => {
         const pick = cs.filter((c) => state.seg === 'all' || c.status === state.seg);
         if (!pick.length) {
-          box.innerHTML = `<p class="muted empty">${state.seg === 'new' ? 'Nothing new to learn. Nice.' : state.seg === 'known' ? 'Mark a note <code>status: known</code> in Obsidian and it moves here.' : 'Nothing here yet.'}</p>`;
+          box.innerHTML = `<p class="muted empty">${state.seg === 'new' ? 'Nothing new to learn. Nice.' : state.seg === 'known' ? 'Tick the circle on an explainer and it moves here.' : 'Nothing here yet.'}</p>`;
           return;
         }
         const known = new Set(CATEGORIES.map(([k]) => k));
         box.innerHTML = CATEGORIES.map(([k, label]) => {
           const items = pick.filter((c) => (known.has(c.category) ? c.category : 'other') === k).sort((a, b) => a.name.localeCompare(b.name));
           if (!items.length) return '';
-          return `<section class="learn-group"><h2 class="learn-cat">${esc(label)} <span class="count">${items.length}</span></h2><ul class="concept-list concept-grid">${items.map((c) => `<li><a class="wl concept-row" href="#" data-note="${esc(c.path)}"><span class="concept-name">${esc(c.name)}${c.status !== 'new' ? ` ${pill(c.status, c.status === 'known' ? 'positive' : 'warning')}` : ''}</span><span class="concept-line">${esc(conceptLine(store, c.path))}</span></a></li>`).join('')}</ul></section>`;
+          return `<section class="learn-group"><h2 class="learn-cat">${esc(label)} <span class="count">${items.length}</span></h2><ul class="concept-list concept-grid">${items.map((c) => `<li class="concept-item"><a class="wl concept-row has-check" href="#" data-note="${esc(c.path)}"><span class="concept-name">${esc(c.name)}${c.status === 'learning' ? ` ${pill('learning', 'warning')}` : ''}</span><span class="concept-line">${esc(conceptLine(store, c.path))}</span></a>${checkHTML(c.path, c.name, c.status === 'known')}</li>`).join('')}</ul></section>`;
         }).join('');
       };
       draw();
