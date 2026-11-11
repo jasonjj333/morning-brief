@@ -7,7 +7,7 @@ import { initPress } from './press.js';
 import { projectHomeView, projectUpdatesView, projectReposView, repoDetailView, projectLearnView, projectDecisionsView, isConcept, withLearnControls } from './project.js';
 import { openSheet, toast, closeAllSheets } from './sheet.js';
 import { wireSwipes } from './swipe.js';
-import { animate, spring } from './motion.js';
+import { animate, spring, reducedMotion } from './motion.js';
 import { checkMeetingAlerts, alertsSettingsHTML } from './alerts.js';
 import {
   todayView, actionsView, eventsView, notesView, noteView, feedbackView,
@@ -116,9 +116,21 @@ async function switchProfile(id) {
   switching = true;
   closeMenu({ instant: true });
   closeAllSheets();
+  const order = Object.keys(PROFILES);
+  const dir = Math.sign(order.indexOf(id) - order.indexOf(store.profile.id)) || 1;
+  const calm = reducedMotion.matches;
+  // The switcher answers at once: its highlight glides over and the accent color starts blending.
+  markProfile(id, true);
+  document.documentElement.dataset.profile = id;
   const stage = $('#stage');
-  const s = spring({ response: 0.32, damping: 1 });
-  await animate(stage, [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.97)' }], s);
+  const scope = $('[data-bind="scope"]');
+  await Promise.all([
+    animate(stage, calm ? [{ opacity: 1 }, { opacity: 0 }]
+      : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-dir * 28}px) scale(0.985)` }],
+    { duration: calm ? 120 : 200, easing: 'cubic-bezier(0.4, 0, 1, 1)' }),
+    nav.tabsOut(),
+    animate(scope, [{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in' }),
+  ]);
   store.removeEventListener('change', onStoreChange);
   clearInterval(pollTimer);
   store = new Store(id);
@@ -134,11 +146,39 @@ async function switchProfile(id) {
   nav.select(tabs[0].id);
   history.replaceState({ tab: tabs[0].id, routes: nav.routes, profile: id }, '');
   chrome();
-  await animate(stage, [{ opacity: 0, transform: 'scale(1.03)' }, { opacity: 1, transform: 'scale(1)' }], spring({ response: 0.42, damping: 0.9 }));
-  stage.style.transform = '';
+  const s = spring({ response: 0.5, damping: 0.88 });
+  await Promise.all([
+    animate(stage, calm ? [{ opacity: 0 }, { opacity: 1 }]
+      : [{ opacity: 0, transform: `translateX(${dir * 40}px) scale(0.985)` }, { opacity: 1, transform: 'none' }], calm ? { duration: 160, easing: 'ease-out' } : s),
+    nav.tabsIn(),
+    animate(scope, [{ opacity: 0, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], spring({ response: 0.4, damping: 1 })),
+  ]);
+  stage.style.transform = ''; stage.style.opacity = '';
+  scope.style.transform = ''; scope.style.opacity = '';
   switching = false;
   store.sync();
 }
+
+// Desktop sidebar profile switcher: one highlight that glides to the chosen profile.
+let profileAt = null;
+function markProfile(id, animateIt = false) {
+  const wrap = $('.side-profiles');
+  if (!wrap) return;
+  for (const b of wrap.querySelectorAll('[data-switch]')) b.setAttribute('aria-selected', String(b.dataset.switch === id));
+  const thumb = wrap.querySelector('.profile-thumb');
+  const b = wrap.querySelector(`[data-switch="${id}"]`);
+  if (!thumb || !b || !b.offsetWidth) return;
+  const to = { x: b.offsetLeft, w: b.offsetWidth };
+  const from = profileAt;
+  profileAt = to;
+  thumb.style.width = `${to.w}px`;
+  thumb.style.transform = `translateX(${to.x}px)`;
+  thumb.style.opacity = '1';
+  if (!animateIt || !from || reducedMotion.matches || (from.x === to.x && from.w === to.w)) return;
+  thumb.getAnimations().forEach((a) => a.cancel());
+  animate(thumb, [{ transform: `translateX(${from.x}px)`, width: `${from.w}px` }, { transform: `translateX(${to.x}px)`, width: `${to.w}px` }], spring({ response: 0.38, damping: 0.78 }));
+}
+new ResizeObserver(() => markProfile(store.profile.id)).observe(document.querySelector('.tabbar'));
 
 // The profile chip opens a dropdown menu under itself, like an iOS pull-down menu.
 let menu = null;
@@ -209,7 +249,7 @@ function patchRows(root) {
 function chrome() {
   $('[data-bind="scope"]').textContent = `${store.profile.label}${store.dev ? ' · local preview' : ` · ${store.config.repo}`}`;
   document.documentElement.dataset.profile = store.profile.id;
-  for (const b of document.querySelectorAll('.side-profiles [data-switch]')) b.setAttribute('aria-selected', String(b.dataset.switch === store.profile.id));
+  if (!switching) markProfile(store.profile.id);
   $('[data-bind="fresh"]').textContent = store.syncing ? 'Syncing…' : store.commit?.date ? `Updated ${ago(store.commit.date)}` : '';
   nav.setCount('feedback', store.pending.length);
   document.body.classList.toggle('is-syncing', store.syncing);
@@ -783,3 +823,5 @@ chrome();
 store.sync();
 checkAlerts();
 document.documentElement.classList.add('ready');
+// Color blending starts after the first paint, so the saved profile's colors don't fade in on load.
+requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.add('motion-ready')));

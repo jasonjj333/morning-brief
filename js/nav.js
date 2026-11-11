@@ -41,6 +41,31 @@ export class Navigator {
     }
   }
 
+  // Profile switch: the old tab list slips away, then the new one arrives item by item.
+  tabsOut() {
+    const items = [...this.tabbar.querySelectorAll('.tabs .tab, .tabs .tab-thumb')];
+    if (reducedMotion.matches) return Promise.resolve();
+    const side = matchMedia('(min-width: 900px)').matches;
+    return Promise.all(items.map((el, i) => animate(el,
+      [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: side ? 'translateX(-10px)' : 'translateY(6px)' }],
+      { duration: 160, delay: Math.min(i, 6) * 12, easing: 'cubic-bezier(0.4, 0, 1, 1)' })));
+  }
+
+  tabsIn() {
+    const items = [...this.tabbar.querySelectorAll('.tabs .tab')];
+    const thumb = this.tabbar.querySelector('.tab-thumb');
+    if (reducedMotion.matches) return Promise.resolve();
+    const side = matchMedia('(min-width: 900px)').matches;
+    const s = spring({ response: 0.46, damping: 0.86 });
+    const all = items.map((el, i) => animate(el,
+      [{ opacity: 0, transform: side ? 'translateX(14px)' : 'translateY(10px) scale(0.9)' }, { opacity: 1, transform: 'none' }],
+      { ...s, delay: 40 + i * 32 }).then(() => { el.style.opacity = ''; el.style.transform = ''; }));
+    if (thumb && this.thumbAt) {
+      all.push(animate(thumb, [{ opacity: 0, transform: `translateY(${this.thumbAt.y}px) scale(0.92)` }, { opacity: 1, transform: `translateY(${this.thumbAt.y}px)` }], { ...s, delay: 40 }));
+    }
+    return Promise.all(all);
+  }
+
   // Desktop sidebar: one highlight that glides between tabs on a spring instead of jumping.
   placeThumb(animateIt = true) {
     const thumb = this.tabbar.querySelector('.tab-thumb');

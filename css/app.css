@@ -1438,3 +1438,30 @@ details[data-animating] > summary .chev { transition-duration: 0.3s; }
   .learn-btn-top { width: 32px; padding: 0; }
   .learn-btn-top .learn-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 }
+
+/* ---------- motion: profile switch ---------- */
+
+/* Accent colors are registered so a profile change blends them instead of flipping. */
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #1b6e66; }
+@property --accent-tint { syntax: '<color>'; inherits: true; initial-value: #e2efed; }
+@property --pill-accent-bg { syntax: '<color>'; inherits: true; initial-value: #e2efed; }
+@property --pill-accent-ink { syntax: '<color>'; inherits: true; initial-value: #0f4a44; }
+:root.motion-ready {
+  transition: --accent 0.5s cubic-bezier(0.32, 0.72, 0, 1), --accent-tint 0.5s cubic-bezier(0.32, 0.72, 0, 1),
+    --pill-accent-bg 0.5s cubic-bezier(0.32, 0.72, 0, 1), --pill-accent-ink 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Sidebar profile switcher: a single raised highlight that glides between profiles. */
+.profile-thumb { display: none; }
+@media (min-width: 900px) {
+  .side-profiles { position: relative; }
+  .profile-thumb {
+    display: block; position: absolute; top: 3px; left: 0; height: 30px; width: 0;
+    border-radius: 8px; background: var(--raised); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+    opacity: 0; pointer-events: none; z-index: 0;
+  }
+  .side-profiles button { position: relative; z-index: 1; transition: color 0.25s ease; }
+  .side-profiles button[aria-selected="true"] { background: transparent; box-shadow: none; }
+  .side-profiles .profile-dot { transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .side-profiles button[aria-selected="true"] .profile-dot { transform: scale(1.25); }
+}
